@@ -1,0 +1,26 @@
+{
+  "name": "jowbot",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node index.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@discordjs/voice": "^0.7.2",
+    "discord.js": "^13.2.0",
+    "dotenv": "^10.0.0",
+    "ffmpeg-static": "^4.4.0",
+    "libsodium-wrappers": "^0.7.9",
+    "ytdl-core": "^4.9.1",
+    "ytpl": "^2.2.3",
+    "ytsr": "^3.5.3"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.14",
+    "typescript": "^4.4.4"
+  }
+}
