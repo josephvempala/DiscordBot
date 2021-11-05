@@ -1,5 +1,5 @@
 import {Message} from "discord.js";
-import {addToPlayer, stop, clear, shuffle, skip, getQueue} from "./MusicPlayer";
+import {play, stop, clear, shuffle, skip, getQueue} from "./MusicPlayer";
 
 export async function dispatcher(message : Message) {
     const input = message.content + ' ';
@@ -10,10 +10,10 @@ export async function dispatcher(message : Message) {
             await message.reply('pong');
             break;
         case 'play': case 'p':
-            await addToPlayer(param, message);
+            await play(param, message);
             break;
         case 'stop': case 's':
-            stop(message);
+            await stop(message);
             break;
         case 'clear': case 'c':
             await clear(message);
