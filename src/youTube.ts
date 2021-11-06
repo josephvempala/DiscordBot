@@ -1,6 +1,8 @@
 import {Readable} from "node:stream";
-import {downloadFromInfo, getInfo, videoInfo, getBasicInfo} from "ytdl-core";
+import {videoInfo} from "ytdl-core";
+import {downloadFromInfo, getInfo, getBasicInfo} from 'ytdl-core-discord';
 import ytpl from "ytpl";
+import ytsr from "ytsr";
 
 interface GetAudioStreamSuccess{
     stream : Readable;
@@ -13,13 +15,14 @@ export interface basicVideoInfo{
 }
 
 export async function getYoutubeAudioStream(url : string) : Promise<GetAudioStreamSuccess | null> {
-    for (let i=0;i<5;i++)
-    try{
-        const videoInfo = await getInfo(url);
-        return { stream: downloadFromInfo(videoInfo, {quality: "highestaudio", filter:"audioonly"}), videoInfo: videoInfo};
-    }
-    catch (e){
-        console.error(e);
+    for (let i=0;i<5;i++){
+        try{
+            const videoInfo = await getInfo(url);
+            return { stream: downloadFromInfo(videoInfo, {quality: "highestaudio", filter:"audioonly", highWaterMark: 1<<25}), videoInfo: videoInfo};
+        }
+        catch (e){
+            console.error(e);
+        }
     }
     return null;
 }
@@ -33,7 +36,13 @@ export async function parseYouTubePlayParameter(param : string) : Promise<basicV
         return result;
     }
     const basicVideoInfo = await getBasicInfo(param).catch(() => null );
-    if(basicVideoInfo)
-        return [{url: param, title: basicVideoInfo.player_response.videoDetails.title}];
+    if(basicVideoInfo) return [{url: param, title: basicVideoInfo.player_response.videoDetails.title}];
+    const searchStringResult = await ytsr.getFilters(param);
+    const filterResult = searchStringResult.get('Type')!.get('Video');
+    const finalLinks = await ytsr(filterResult!.url!, {limit:1});
+    if(finalLinks){
+        const link = finalLinks.items[0] as basicVideoInfo;
+        return  [{url:link.url, title : link.title}]
+    }
     return null;
 }

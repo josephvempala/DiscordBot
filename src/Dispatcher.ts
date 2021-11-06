@@ -25,7 +25,7 @@ export async function dispatcher(message : Message) {
             await skip(message);
             break;
         case 'queue': case'q':
-             getQueue(param, message);
+            getQueue(param, message);
             break;
         default:
             return;

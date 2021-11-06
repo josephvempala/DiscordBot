@@ -62,7 +62,7 @@ async function getAudioStream(url : string){
 async function playNext(voiceConnection : VoiceConnection, message : Message){
     const audioToPlay = guildPlayers[message.guild?.id!].queue.shift();
     const stream = await getAudioStream(audioToPlay!.url);
-    if(!stream) return;
+    if(!stream) return message.channel.send(`Unable to play ${audioToPlay!.title}`);
     const resource = createAudioResource(stream.stream, { inputType:StreamType.Arbitrary });
     await guildPlayers[message.guild!.id].player.play(resource);
     return message.channel.send(`Now Playing ${audioToPlay!.title}`);
@@ -120,11 +120,11 @@ export function getQueue(param : string, message : Message){
     let msg = ''
     if(!param)
     {
-        guildPlayers[message.guild?.id!].queue.slice(0, 5).map(x => msg += `${x.title}\n`)
+        guildPlayers[message.guild?.id!].queue.slice(0, 5).forEach((x,i) => msg += `**#${i+1}** ${x.title}\n`)
         return message.channel.send(msg);
     }
     if(isNaN(+param))
         return message.channel.send("Please enter number of queue entries to view");
-    guildPlayers[message.guild?.id!].queue.slice(0, +param).map(x => msg += `${x.title}\n`)
+    guildPlayers[message.guild?.id!].queue.slice(0, +param).forEach((x, i) => msg += `**#${i+1}** ${x.title}\n`)
     return message.channel.send(msg);
 }
