@@ -5,3 +5,7 @@ export function shuffleArray(arr : any[]) {
         [arr[i], arr[j]] = [arr[j], arr[i]];
     }
 }
+
+export const timer = (ms : number) => new Promise( res => {
+    const timeout = setTimeout(res, ms);
+});
