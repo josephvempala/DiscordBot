@@ -16,6 +16,7 @@ async function getYoutubeAudioStream(url) {
         }
         catch (e) {
             console.error(e);
+            return null;
         }
     }
     return null;
