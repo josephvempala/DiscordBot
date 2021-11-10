@@ -8,32 +8,25 @@ async function dispatcher(message) {
     const param = input.substring(input.indexOf(' '), input.length).trim();
     switch (action) {
         case 'ping':
-            await message.reply('pong');
-            break;
+            return message.reply('pong');
         case 'play':
         case 'p':
-            await (0, MusicPlayer_1.play)(param, message);
-            break;
+            return (0, MusicPlayer_1.play)(param, message);
         case 'stop':
         case 's':
-            await (0, MusicPlayer_1.stop)(message);
-            break;
+            return (0, MusicPlayer_1.stop)(message);
         case 'clear':
         case 'c':
-            await (0, MusicPlayer_1.clear)(message);
-            break;
+            return (0, MusicPlayer_1.clear)(message);
         case 'shuffle':
         case 'sh':
-            await (0, MusicPlayer_1.shuffle)(message);
-            break;
+            return (0, MusicPlayer_1.shuffle)(message);
         case 'skip':
         case 'sk':
-            await (0, MusicPlayer_1.skip)(message);
-            break;
+            return (0, MusicPlayer_1.skip)(message);
         case 'queue':
         case 'q':
-            (0, MusicPlayer_1.getQueue)(param, message);
-            break;
+            return (0, MusicPlayer_1.getQueue)(param, message);
         default:
             return;
     }

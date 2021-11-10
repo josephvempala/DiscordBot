@@ -11,7 +11,7 @@ async function getYoutubeAudioStream(url) {
     for (let i = 0; i < 15; i++) {
         try {
             const videoInfo = await (0, ytdl_core_discord_1.getInfo)(url);
-            const stream = (0, ytdl_core_discord_1.downloadFromInfo)(videoInfo, { quality: "highestaudio", filter: "audioonly", highWaterMark: 1 << 25 });
+            const stream = (0, ytdl_core_discord_1.downloadFromInfo)(videoInfo, { quality: "highestaudio", filter: "audioonly", highWaterMark: 1 << 25, });
             return { stream: stream, videoInfo: videoInfo };
         }
         catch (e) {

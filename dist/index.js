@@ -7,18 +7,15 @@ const http_1 = require("http");
 (0, dotenv_1.config)();
 (0, http_1.createServer)((req, res) => { res.writeHead(200, { 'Content-Type': 'text/plain' }); res.end(); }).listen(process.env.PORT || 5000);
 const client = new discord_js_1.Client({ intents: [discord_js_1.Intents.FLAGS.GUILDS, discord_js_1.Intents.FLAGS.GUILD_MESSAGES, discord_js_1.Intents.FLAGS.GUILD_VOICE_STATES] });
-(async () => {
-    client.on("ready", () => {
-        console.log("bot is ready");
-    });
-    client.on("messageCreate", async (message) => {
-        if (message.content.startsWith('-')) {
-            await (0, Dispatcher_1.dispatcher)(message);
-        }
-    });
-    const loginResult = await client.login(process.env.TOKEN);
-    if (loginResult) {
-        console.log("logged in successfully");
+client.on("ready", () => {
+    console.log("bot is ready");
+});
+client.on("messageCreate", (message) => {
+    if (message.content.startsWith('-')) {
+        (0, Dispatcher_1.dispatcher)(message).then();
     }
-})();
+});
+client.login(process.env.TOKEN).then(() => {
+    console.log("logged in successfully");
+});
 //# sourceMappingURL=index.js.map

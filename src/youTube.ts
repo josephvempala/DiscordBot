@@ -18,7 +18,7 @@ export async function getYoutubeAudioStream(url : string) : Promise<GetAudioStre
     for (let i=0;i<15;i++){
         try{
             const videoInfo = await getInfo(url);
-            const stream = downloadFromInfo(videoInfo, {quality: "highestaudio", filter:"audioonly", highWaterMark: 1<<25});
+            const stream = downloadFromInfo(videoInfo, {quality: "highestaudio", filter:"audioonly", highWaterMark: 1<<25, });
             return { stream: stream, videoInfo: videoInfo};
         }
         catch (e){
