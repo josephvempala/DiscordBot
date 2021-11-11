@@ -43,20 +43,6 @@ async function createNewGuildPlayer(message: Message, queue? : basicVideoInfo[])
         currentlyPlaying : null,
         playerMessages: {} as PlayerMessageDictionary,
     }
-    guildPlayers[message.guild?.id!] = guildPlayer;
-    await playNext(guildPlayer.voiceConnection, message);
-    guildPlayer.player.addListener(AudioPlayerStatus.Idle,async () => {
-        await guildPlayer.playerMessages["nowPlaying"]?.delete();
-        delete guildPlayer.playerMessages["nowPlaying"];
-        if (guildPlayers[message.guild?.id!].queue.length <= 0) {
-            guildPlayer.player.removeAllListeners(AudioPlayerStatus.Idle);
-            guildPlayer.voiceConnection.disconnect();
-            guildPlayer.voiceConnection.destroy();
-            delete guildPlayers[message.guild!.id];
-            return;
-        }
-        await playNext(guildPlayer.voiceConnection, guildPlayer.playRequestMessage);
-    });
     guildPlayer.player.addListener("error", async (e : any)=>{
         console.log(e);
         await guildPlayer.playerMessages["nowPlaying"]?.delete();
@@ -66,7 +52,22 @@ async function createNewGuildPlayer(message: Message, queue? : basicVideoInfo[])
         }
         guildPlayer.player.stop();
         await playNext(guildPlayer.voiceConnection, guildPlayer.playRequestMessage);
-    })
+    });
+    guildPlayers[message.guild?.id!] = guildPlayer;
+    await playNext(guildPlayer.voiceConnection, message);
+    guildPlayer.player.addListener(AudioPlayerStatus.Idle,async () => {
+        await guildPlayer.playerMessages["nowPlaying"]?.delete();
+        delete guildPlayer.playerMessages["nowPlaying"];
+        if (guildPlayers[message.guild?.id!].queue.length <= 0) {
+            guildPlayer.player.removeAllListeners(AudioPlayerStatus.Idle);
+            guildPlayer.player.removeAllListeners("error");
+            guildPlayer.voiceConnection.disconnect();
+            guildPlayer.voiceConnection.destroy();
+            delete guildPlayers[message.guild!.id];
+            return;
+        }
+        await playNext(guildPlayer.voiceConnection, guildPlayer.playRequestMessage);
+    });
     guildPlayer.voiceConnection.subscribe(guildPlayer.player);
 }
 
@@ -89,7 +90,8 @@ async function playNext(voiceConnection : VoiceConnection, message : Message) : 
     guildPlayers[message.guild?.id!].currentlyPlaying = audioToPlay!;
     const stream = await getAudioStream(audioToPlay!.url);
     if(!stream){
-        message.react('⛔').then(()=> message.channel.send(`Unable to play ${audioToPlay!.title}`));
+        await message.react('⛔');
+        await message.channel.send(`Unable to play ${audioToPlay!.title}`)
         return playNext(voiceConnection,message);
     }
     const resource = createAudioResource(stream.stream, { inputType:StreamType.Arbitrary });

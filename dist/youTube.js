@@ -43,7 +43,7 @@ async function parseYouTubePlayParameter(param) {
         .catch(() => null);
     if (!searchStringResult?.url)
         return null;
-    const finalLinks = await (0, ytsr_1.default)(searchStringResult.url, { limit: 1 });
+    const finalLinks = await (0, ytsr_1.default)(searchStringResult.url, { limit: 1 }).catch(() => null);
     if (finalLinks) {
         const link = finalLinks.items[0];
         const basicVideoInfo = await (0, ytdl_core_discord_1.getBasicInfo)(link.url).catch(() => null);

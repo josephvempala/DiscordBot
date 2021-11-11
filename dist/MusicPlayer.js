@@ -20,20 +20,6 @@ async function createNewGuildPlayer(message, queue) {
         currentlyPlaying: null,
         playerMessages: {},
     };
-    guildPlayers[message.guild?.id] = guildPlayer;
-    await playNext(guildPlayer.voiceConnection, message);
-    guildPlayer.player.addListener(voice_1.AudioPlayerStatus.Idle, async () => {
-        await guildPlayer.playerMessages["nowPlaying"]?.delete();
-        delete guildPlayer.playerMessages["nowPlaying"];
-        if (guildPlayers[message.guild?.id].queue.length <= 0) {
-            guildPlayer.player.removeAllListeners(voice_1.AudioPlayerStatus.Idle);
-            guildPlayer.voiceConnection.disconnect();
-            guildPlayer.voiceConnection.destroy();
-            delete guildPlayers[message.guild.id];
-            return;
-        }
-        await playNext(guildPlayer.voiceConnection, guildPlayer.playRequestMessage);
-    });
     guildPlayer.player.addListener("error", async (e) => {
         console.log(e);
         await guildPlayer.playerMessages["nowPlaying"]?.delete();
@@ -41,11 +27,23 @@ async function createNewGuildPlayer(message, queue) {
         if (e.message === "Status code: 403" && guildPlayer.currentlyPlaying) {
             queue?.push(guildPlayer.currentlyPlaying);
         }
-        //guildPlayer.player.removeAllListeners(AudioPlayerStatus.Idle);
-        //guildPlayer.player.removeAllListeners("error");
         guildPlayer.player.stop();
         await playNext(guildPlayer.voiceConnection, guildPlayer.playRequestMessage);
-        //await createNewGuildPlayer(message, guildPlayer.queue);
+    });
+    guildPlayers[message.guild?.id] = guildPlayer;
+    await playNext(guildPlayer.voiceConnection, message);
+    guildPlayer.player.addListener(voice_1.AudioPlayerStatus.Idle, async () => {
+        await guildPlayer.playerMessages["nowPlaying"]?.delete();
+        delete guildPlayer.playerMessages["nowPlaying"];
+        if (guildPlayers[message.guild?.id].queue.length <= 0) {
+            guildPlayer.player.removeAllListeners(voice_1.AudioPlayerStatus.Idle);
+            guildPlayer.player.removeAllListeners("error");
+            guildPlayer.voiceConnection.disconnect();
+            guildPlayer.voiceConnection.destroy();
+            delete guildPlayers[message.guild.id];
+            return;
+        }
+        await playNext(guildPlayer.voiceConnection, guildPlayer.playRequestMessage);
     });
     guildPlayer.voiceConnection.subscribe(guildPlayer.player);
 }
@@ -67,7 +65,8 @@ async function playNext(voiceConnection, message) {
     guildPlayers[message.guild?.id].currentlyPlaying = audioToPlay;
     const stream = await getAudioStream(audioToPlay.url);
     if (!stream) {
-        message.react('⛔').then(() => message.channel.send(`Unable to play ${audioToPlay.title}`));
+        await message.react('⛔');
+        await message.channel.send(`Unable to play ${audioToPlay.title}`);
         return playNext(voiceConnection, message);
     }
     const resource = (0, voice_1.createAudioResource)(stream.stream, { inputType: voice_1.StreamType.Arbitrary });

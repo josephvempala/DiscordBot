@@ -50,7 +50,7 @@ export async function parseYouTubePlayParameter(param : string) : Promise<basicV
         .catch(() => null);
     if(!searchStringResult?.url)
         return null;
-    const finalLinks = await ytsr(searchStringResult.url, {limit:1});
+    const finalLinks = await ytsr(searchStringResult.url, {limit:1}).catch(() => null);
     if(finalLinks){
         const link = finalLinks.items[0] as basicVideoInfo;
         const basicVideoInfo = await getBasicInfo(link.url).catch(() => null);
