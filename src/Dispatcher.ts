@@ -1,5 +1,5 @@
 import {Message} from "discord.js";
-import {play, stop, clear, shuffle, skip, getQueue} from "./MusicPlayer";
+import {addToQueue, stop, clear, shuffle, skip, getQueue} from "./MusicPlayer";
 
 export async function dispatcher(message : Message) {
     const input = message.content + ' ';
@@ -9,14 +9,14 @@ export async function dispatcher(message : Message) {
         case 'ping':
             return message.reply('pong');
         case 'play': case 'p':
-            return play(param, message);
-        case 'stop': case 's':
+            return addToQueue(param, message);
+        case 'stop': case 'st':
             return stop(message);
         case 'clear': case 'c':
             return clear(message);
         case 'shuffle': case 'sh':
             return shuffle(message);
-        case 'skip': case 'sk':
+        case 'skip': case 's':
             return skip(message);
         case 'queue': case'q':
             return getQueue(param, message);

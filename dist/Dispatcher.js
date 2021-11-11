@@ -11,9 +11,9 @@ async function dispatcher(message) {
             return message.reply('pong');
         case 'play':
         case 'p':
-            return (0, MusicPlayer_1.play)(param, message);
+            return (0, MusicPlayer_1.addToQueue)(param, message);
         case 'stop':
-        case 's':
+        case 'st':
             return (0, MusicPlayer_1.stop)(message);
         case 'clear':
         case 'c':
@@ -22,7 +22,7 @@ async function dispatcher(message) {
         case 'sh':
             return (0, MusicPlayer_1.shuffle)(message);
         case 'skip':
-        case 'sk':
+        case 's':
             return (0, MusicPlayer_1.skip)(message);
         case 'queue':
         case 'q':

@@ -11,7 +11,7 @@ client.on("ready",()=>{
 });
 client.on("messageCreate",(message)=>{
     if(message.content.startsWith('-')){
-        dispatcher(message).then();
+        dispatcher(message).catch(x => "error");
     }
 });
 client.login(process.env.TOKEN).then(()=>{

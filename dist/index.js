@@ -12,7 +12,7 @@ client.on("ready", () => {
 });
 client.on("messageCreate", (message) => {
     if (message.content.startsWith('-')) {
-        (0, Dispatcher_1.dispatcher)(message).then();
+        (0, Dispatcher_1.dispatcher)(message).catch(x => "error");
     }
 });
 client.login(process.env.TOKEN).then(() => {

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getQueue = exports.clear = exports.skip = exports.shuffle = exports.stop = exports.play = void 0;
+exports.getQueue = exports.clear = exports.skip = exports.shuffle = exports.stop = exports.addToQueue = void 0;
 const voice_1 = require("@discordjs/voice");
 const youTube_1 = require("./youTube");
 const util_1 = require("./util");
@@ -15,12 +15,12 @@ async function createNewGuildPlayer(message, queue) {
             guildId: message.guild.id,
             adapterCreator: message.guild.voiceAdapterCreator
         }),
-        guild: message.member?.guild
+        guild: message.member?.guild,
+        currentlyPlaying: undefined
     };
     guildPlayers[message.guild?.id] = guildPlayer;
-    let nowPlayingMessage = await playNext(guildPlayer.voiceConnection, message).catch(x => console.log(x));
+    await playNext(guildPlayer.voiceConnection, message);
     guildPlayer.player.addListener(voice_1.AudioPlayerStatus.Idle, async () => {
-        nowPlayingMessage?.delete();
         if (guildPlayers[message.guild?.id].queue.length <= 0) {
             guildPlayer.player.removeAllListeners(voice_1.AudioPlayerStatus.Idle);
             guildPlayer.voiceConnection.disconnect();
@@ -28,12 +28,16 @@ async function createNewGuildPlayer(message, queue) {
             delete guildPlayers[message.guild.id];
             return;
         }
-        nowPlayingMessage = await playNext(guildPlayer.voiceConnection, message).catch(x => console.log(x));
+        await playNext(guildPlayer.voiceConnection, message);
     });
-    guildPlayer.player.addListener("error", () => {
-        nowPlayingMessage?.delete();
-        guildPlayer.player.stop();
-        nowPlayingMessage?.edit("Error while playing");
+    guildPlayer.player.addListener("error", async (e) => {
+        console.log(e);
+        if (e.statusCode === 401 || 403 && guildPlayer.currentlyPlaying) {
+            queue?.push(guildPlayer.currentlyPlaying);
+        }
+        guildPlayer.player.removeAllListeners(voice_1.AudioPlayerStatus.Idle);
+        guildPlayer.player.removeAllListeners("error");
+        await createNewGuildPlayer(message, guildPlayer.queue);
     });
     guildPlayer.voiceConnection.subscribe(guildPlayer.player);
 }
@@ -48,15 +52,23 @@ async function getAudioStream(url) {
     }
 }
 async function playNext(voiceConnection, message) {
+    if (guildPlayers[message.guild?.id].queue.length <= 0) {
+        return null;
+    }
     const audioToPlay = guildPlayers[message.guild?.id].queue.shift();
+    guildPlayers[message.guild?.id].currentlyPlaying = audioToPlay;
     const stream = await getAudioStream(audioToPlay.url);
-    if (!stream)
-        return message.react('⛔').then(() => message.channel.send(`Unable to play ${audioToPlay.title}`));
+    if (!stream) {
+        message.react('⛔').then(() => message.channel.send(`Unable to play ${audioToPlay.title}`));
+        return playNext(voiceConnection, message);
+    }
     const resource = (0, voice_1.createAudioResource)(stream.stream, { inputType: voice_1.StreamType.Arbitrary });
     guildPlayers[message.guild.id].player.play(resource);
-    return message.channel.send(`Now Playing ${audioToPlay.title}`);
+    const nowPlayingMessage = await message.channel.send(`Now Playing ${audioToPlay.title}, \`[${(0, util_1.secondsToTime)(audioToPlay.length)}]\``);
+    await (0, util_1.timer)(audioToPlay.length * 1000);
+    nowPlayingMessage.delete();
 }
-async function play(param, message) {
+async function addToQueue(param, message) {
     if (!message.member.voice.channel) {
         message.channel.send("Please join a voice channel to listen");
         return;
@@ -78,7 +90,7 @@ async function play(param, message) {
     else
         message.react("👍");
 }
-exports.play = play;
+exports.addToQueue = addToQueue;
 async function stop(message) {
     if (guildPlayers[message.guild?.id] && guildPlayers[message.guild?.id].player.state.status === voice_1.AudioPlayerStatus.Playing) {
         guildPlayers[message.guild?.id].queue = [];
