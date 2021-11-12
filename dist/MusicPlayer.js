@@ -9,7 +9,6 @@ async function createNewGuildPlayer(message, queue) {
     const guildPlayer = {
         queue: queue ? queue : [],
         player: (0, voice_1.createAudioPlayer)(),
-        playRequestMessage: message,
         voiceConnection: (0, voice_1.joinVoiceChannel)({
             selfDeaf: true,
             channelId: message.member.voice.channel.id,
@@ -19,33 +18,51 @@ async function createNewGuildPlayer(message, queue) {
         guild: message.member?.guild,
         currentlyPlaying: null,
         playerMessages: {},
+        botLeaveTimeout: null,
     };
+    guildPlayers[message.guild?.id] = guildPlayer;
+    registerGuildPlayerEventListeners(guildPlayer);
+    guildPlayer.voiceConnection.subscribe(guildPlayer.player);
+}
+async function removeGuildPlayer(guildPlayer) {
+    for (const element in guildPlayer.playerMessages) {
+        let message = guildPlayer.playerMessages[element];
+        if (message.deletable && !message.deleted) {
+            await message.delete();
+        }
+    }
+    guildPlayer.player.removeAllListeners(voice_1.AudioPlayerStatus.Idle);
+    guildPlayer.player.removeAllListeners("error");
+    guildPlayer.voiceConnection.disconnect();
+    delete guildPlayers[guildPlayer.guild.id];
+}
+function registerGuildPlayerEventListeners(guildPlayer) {
+    guildPlayer.voiceConnection.addListener(voice_1.VoiceConnectionStatus.Disconnected, async () => {
+        if (guildPlayers[guildPlayer.guild.id])
+            await removeGuildPlayer(guildPlayer);
+        guildPlayer.voiceConnection.destroy();
+    });
     guildPlayer.player.addListener("error", async (e) => {
         console.log(e);
-        await guildPlayer.playerMessages["nowPlaying"]?.delete();
-        delete guildPlayer.playerMessages["nowPlaying"];
+        await guildPlayer.playerMessages['playRequestMessage']?.delete();
+        delete guildPlayer.playerMessages['playRequestMessage'];
         if (e.message === "Status code: 403" && guildPlayer.currentlyPlaying) {
-            queue?.push(guildPlayer.currentlyPlaying);
+            guildPlayer.queue?.push(guildPlayer.currentlyPlaying);
         }
         guildPlayer.player.stop();
-        await playNext(guildPlayer.voiceConnection, guildPlayer.playRequestMessage);
+        await playNext(guildPlayer.voiceConnection, guildPlayer.playerMessages['playRequestMessage']);
     });
-    guildPlayers[message.guild?.id] = guildPlayer;
-    await playNext(guildPlayer.voiceConnection, message);
     guildPlayer.player.addListener(voice_1.AudioPlayerStatus.Idle, async () => {
-        await guildPlayer.playerMessages["nowPlaying"]?.delete();
-        delete guildPlayer.playerMessages["nowPlaying"];
-        if (guildPlayers[message.guild?.id].queue.length <= 0) {
-            guildPlayer.player.removeAllListeners(voice_1.AudioPlayerStatus.Idle);
-            guildPlayer.player.removeAllListeners("error");
-            guildPlayer.voiceConnection.disconnect();
-            guildPlayer.voiceConnection.destroy();
-            delete guildPlayers[message.guild.id];
+        await guildPlayer.playerMessages['playRequestMessage']?.delete();
+        delete guildPlayer.playerMessages['playRequestMessage'];
+        if (guildPlayers[guildPlayer.guild.id].queue.length <= 0) {
+            guildPlayer.botLeaveTimeout = setTimeout(async () => {
+                await removeGuildPlayer(guildPlayer);
+            }, 30000);
             return;
         }
-        await playNext(guildPlayer.voiceConnection, guildPlayer.playRequestMessage);
+        await playNext(guildPlayer.voiceConnection, guildPlayer.playerMessages['playRequestMessage']);
     });
-    guildPlayer.voiceConnection.subscribe(guildPlayer.player);
 }
 async function getAudioStream(url) {
     let stream;
@@ -71,21 +88,24 @@ async function playNext(voiceConnection, message) {
     }
     const resource = (0, voice_1.createAudioResource)(stream.stream, { inputType: voice_1.StreamType.Arbitrary });
     guildPlayers[message.guild.id].player.play(resource);
-    guildPlayers[message.guild?.id].playerMessages["nowPlaying"] = await message.channel.send(`Now Playing ${audioToPlay.title}, \`[${(0, util_1.secondsToTime)(audioToPlay.length)}]\``);
+    guildPlayers[message.guild?.id].playerMessages['playRequestMessage'] = await message.channel.send(`Now Playing ${audioToPlay.title}, \`[${(0, util_1.secondsToTime)(audioToPlay.length)}]\``);
 }
 async function addToQueue(param, message) {
     if (!message.member.voice.channel) {
         message.channel.send("Please join a voice channel to listen");
         return;
     }
+    if (guildPlayers[message.guild?.id] && guildPlayers[message.guild?.id].botLeaveTimeout) {
+        clearTimeout(guildPlayers[message.guild?.id].botLeaveTimeout);
+    }
+    ;
     const newMessage = await message.channel.send(`Searching youtube for ${param}`);
     const urls = await (0, youTube_1.parseYouTubePlayParameter)(param);
+    newMessage.delete();
     if (!urls) {
         message.react('⛔').then(() => newMessage.edit("Invalid Query"));
         return;
     }
-    else
-        newMessage.delete();
     if (!guildPlayers[message.guild?.id])
         await createNewGuildPlayer(message, [...urls]);
     else
@@ -94,6 +114,9 @@ async function addToQueue(param, message) {
         message.channel.send(`Added playlist of ${urls.length} songs to the queue`);
     else
         await message.react("👍");
+    if (guildPlayers[message.guild?.id].player.state.status === voice_1.AudioPlayerStatus.Idle) {
+        await playNext(guildPlayers[message.guild?.id].voiceConnection, message);
+    }
 }
 exports.addToQueue = addToQueue;
 function stop(message) {

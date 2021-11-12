@@ -7,7 +7,7 @@ import {
     DiscordGatewayAdapterCreator,
     joinVoiceChannel,
     StreamType,
-    VoiceConnection,
+    VoiceConnection, VoiceConnectionStatus,
 } from "@discordjs/voice"
 import {basicVideoInfo, getYoutubeAudioStream, parseYouTubePlayParameter} from "./youTube";
 import {secondsToTime, shuffleArray} from "./util"
@@ -21,9 +21,9 @@ interface IGuildPlayer {
     player : AudioPlayer;
     voiceConnection : VoiceConnection;
     guild : Guild;
-    playRequestMessage:Message
     currentlyPlaying : basicVideoInfo | null;
     playerMessages : PlayerMessageDictionary;
+    botLeaveTimeout : NodeJS.Timeout | null;
 }
 
 const guildPlayers : {[guildId : string] : IGuildPlayer} = {};
@@ -32,7 +32,6 @@ async function createNewGuildPlayer(message: Message, queue? : basicVideoInfo[])
     const guildPlayer = {
         queue : queue ? queue : [],
         player : createAudioPlayer(),
-        playRequestMessage  : message,
         voiceConnection : joinVoiceChannel({
             selfDeaf : true,
             channelId: message.member!.voice.channel!.id,
@@ -42,33 +41,53 @@ async function createNewGuildPlayer(message: Message, queue? : basicVideoInfo[])
         guild : message.member?.guild!,
         currentlyPlaying : null,
         playerMessages: {} as PlayerMessageDictionary,
+        botLeaveTimeout: null,
     }
-    guildPlayer.player.addListener("error", async (e : any)=>{
+    guildPlayers[message.guild?.id!] = guildPlayer;
+    registerGuildPlayerEventListeners(guildPlayer);
+    guildPlayer.voiceConnection.subscribe(guildPlayer.player);
+}
+
+async function removeGuildPlayer(guildPlayer : IGuildPlayer){
+    for(const element in guildPlayer.playerMessages){
+        let message = guildPlayer.playerMessages[element];
+        if(message.deletable && !message.deleted){
+            await message.delete();
+        }
+    }
+    guildPlayer.player.removeAllListeners(AudioPlayerStatus.Idle);
+    guildPlayer.player.removeAllListeners("error");
+    guildPlayer.voiceConnection.disconnect();
+    delete guildPlayers[guildPlayer.guild.id];
+}
+
+function registerGuildPlayerEventListeners(guildPlayer : IGuildPlayer){
+    guildPlayer.voiceConnection.addListener(VoiceConnectionStatus.Disconnected,async () => {
+        if(guildPlayers[guildPlayer.guild.id])
+            await removeGuildPlayer(guildPlayer);
+        guildPlayer.voiceConnection.destroy();
+    });
+    guildPlayer.player.addListener("error",async (e : any) => {
         console.log(e);
-        await guildPlayer.playerMessages["nowPlaying"]?.delete();
-        delete guildPlayer.playerMessages["nowPlaying"];
+        await guildPlayer.playerMessages['playRequestMessage']?.delete();
+        delete guildPlayer.playerMessages['playRequestMessage'];
         if(e.message === "Status code: 403" && guildPlayer.currentlyPlaying){
-            queue?.push(guildPlayer.currentlyPlaying!);
+            guildPlayer.queue?.push(guildPlayer.currentlyPlaying!);
         }
         guildPlayer.player.stop();
-        await playNext(guildPlayer.voiceConnection, guildPlayer.playRequestMessage);
+        await playNext(guildPlayer.voiceConnection, guildPlayer.playerMessages['playRequestMessage']);
     });
-    guildPlayers[message.guild?.id!] = guildPlayer;
-    await playNext(guildPlayer.voiceConnection, message);
     guildPlayer.player.addListener(AudioPlayerStatus.Idle,async () => {
-        await guildPlayer.playerMessages["nowPlaying"]?.delete();
-        delete guildPlayer.playerMessages["nowPlaying"];
-        if (guildPlayers[message.guild?.id!].queue.length <= 0) {
-            guildPlayer.player.removeAllListeners(AudioPlayerStatus.Idle);
-            guildPlayer.player.removeAllListeners("error");
-            guildPlayer.voiceConnection.disconnect();
-            guildPlayer.voiceConnection.destroy();
-            delete guildPlayers[message.guild!.id];
+        await guildPlayer.playerMessages['playRequestMessage']?.delete();
+        delete guildPlayer.playerMessages['playRequestMessage'];
+        if (guildPlayers[guildPlayer.guild.id].queue.length <= 0) {
+            guildPlayer.botLeaveTimeout = setTimeout(async () => {
+                await removeGuildPlayer(guildPlayer);
+            },30000);
             return;
         }
-        await playNext(guildPlayer.voiceConnection, guildPlayer.playRequestMessage);
+        await playNext(guildPlayer.voiceConnection, guildPlayer.playerMessages['playRequestMessage']);
     });
-    guildPlayer.voiceConnection.subscribe(guildPlayer.player);
 }
 
 async function getAudioStream(url : string){
@@ -96,7 +115,7 @@ async function playNext(voiceConnection : VoiceConnection, message : Message) : 
     }
     const resource = createAudioResource(stream.stream, { inputType:StreamType.Arbitrary });
     guildPlayers[message.guild!.id].player.play(resource);
-    guildPlayers[message.guild?.id!].playerMessages["nowPlaying"] = await message.channel.send(`Now Playing ${audioToPlay!.title}, \`[${secondsToTime(audioToPlay!.length)}]\``);
+    guildPlayers[message.guild?.id!].playerMessages['playRequestMessage'] = await message.channel.send(`Now Playing ${audioToPlay!.title}, \`[${secondsToTime(audioToPlay!.length)}]\``);
 }
 
 export async function addToQueue(param : string, message: Message){
@@ -104,17 +123,23 @@ export async function addToQueue(param : string, message: Message){
         message.channel.send("Please join a voice channel to listen");
         return;
     }
+    if(guildPlayers[message.guild?.id!] && guildPlayers[message.guild?.id!].botLeaveTimeout){
+        clearTimeout(guildPlayers[message.guild?.id!].botLeaveTimeout!)
+    };
     const newMessage = await message.channel.send(`Searching youtube for ${param}`);
     const urls = await parseYouTubePlayParameter(param);
+    newMessage.delete();
     if(!urls){
         message.react('⛔').then(()=>newMessage.edit("Invalid Query"));
         return;
     }
-    else newMessage.delete();
     if(!guildPlayers[message.guild?.id!]) await createNewGuildPlayer(message, [...urls]);
     else guildPlayers[message.guild?.id!].queue = [...guildPlayers[message.guild?.id!].queue, ...urls];
     if(urls.length>1) message.channel.send(`Added playlist of ${urls.length} songs to the queue`);
     else await message.react("👍");
+    if(guildPlayers[message.guild?.id!].player.state.status === AudioPlayerStatus.Idle){
+        await playNext(guildPlayers[message.guild?.id!].voiceConnection, message);
+    }
 }
 
 export function stop(message : Message) {
