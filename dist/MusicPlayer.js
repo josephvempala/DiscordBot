@@ -5,6 +5,7 @@ const voice_1 = require("@discordjs/voice");
 const youTube_1 = require("./youTube");
 const util_1 = require("./util");
 const IBasicVideoInfo_1 = require("./IBasicVideoInfo");
+const soundCloud_1 = require("./soundCloud");
 const guildPlayers = {};
 async function createNewGuildPlayer(message, queue) {
     const guildPlayer = {
@@ -69,6 +70,8 @@ async function getAudioStream(info) {
     switch (info.type) {
         case IBasicVideoInfo_1.VideoInfoType.YouTube:
             return await (0, youTube_1.getYoutubeAudioStream)(info.url);
+        case IBasicVideoInfo_1.VideoInfoType.SoundCloud:
+            return await (0, soundCloud_1.getSoundCloudAudioStream)(info.url);
     }
 }
 async function playNext(voiceConnection, message) {
@@ -87,6 +90,13 @@ async function playNext(voiceConnection, message) {
     guildPlayers[message.guild.id].player.play(resource);
     guildPlayers[message.guild?.id].playerMessages['playRequestMessage'] = await message.channel.send(`Now Playing ${audioToPlay.title}, \`[${(0, util_1.secondsToTime)(audioToPlay.length)}]\``);
 }
+async function parsePlayParameter(param) {
+    let info;
+    info = await (0, soundCloud_1.parseSoundCloudPlayParameter)(param);
+    if (!info)
+        info = await (0, youTube_1.parseYouTubePlayParameter)(param);
+    return info;
+}
 async function addToQueue(param, message) {
     if (!message.member.voice.channel) {
         message.channel.send("Please join a voice channel to listen");
@@ -96,10 +106,10 @@ async function addToQueue(param, message) {
         clearTimeout(guildPlayers[message.guild?.id].botLeaveTimeout);
     }
     const newMessage = await message.channel.send(`Searching for ${param}`);
-    const urls = await (0, youTube_1.parseYouTubePlayParameter)(param);
+    const urls = await parsePlayParameter(param);
     newMessage.delete();
     if (!urls) {
-        message.react('⛔').then(() => newMessage.edit("Unable to find " + param));
+        message.react('⛔').then(() => message.channel.send("Unable to find " + param));
         return;
     }
     if (!guildPlayers[message.guild?.id])

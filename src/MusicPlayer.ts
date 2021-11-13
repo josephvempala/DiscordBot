@@ -13,6 +13,7 @@ import {
 import {getYoutubeAudioStream, parseYouTubePlayParameter} from "./youTube";
 import {secondsToTime, shuffleArray} from "./util"
 import {IBasicVideoInfo, VideoInfoType} from "./IBasicVideoInfo";
+import {getSoundCloudAudioStream, parseSoundCloudPlayParameter} from "./soundCloud";
 
 type PlayerMessageDictionary = {
     [message : string] : Message;
@@ -96,6 +97,8 @@ async function getAudioStream(info : IBasicVideoInfo){
     switch (info.type){
         case VideoInfoType.YouTube:
             return await getYoutubeAudioStream(info.url);
+        case VideoInfoType.SoundCloud:
+            return await getSoundCloudAudioStream(info.url);
     }
 }
 
@@ -116,6 +119,14 @@ async function playNext(voiceConnection : VoiceConnection, message : Message) : 
     guildPlayers[message.guild?.id!].playerMessages['playRequestMessage'] = await message.channel.send(`Now Playing ${audioToPlay!.title}, \`[${secondsToTime(audioToPlay!.length)}]\``);
 }
 
+async function parsePlayParameter(param:string){
+    let info : IBasicVideoInfo[] | null;
+    info = await parseSoundCloudPlayParameter(param);
+    if(!info)
+        info = await parseYouTubePlayParameter(param);
+    return info;
+}
+
 export async function addToQueue(param : string, message: Message){
     if(!message.member!.voice.channel){
         message.channel.send("Please join a voice channel to listen");
@@ -125,10 +136,10 @@ export async function addToQueue(param : string, message: Message){
         clearTimeout(guildPlayers[message.guild?.id!].botLeaveTimeout!)
     }
     const newMessage = await message.channel.send(`Searching for ${param}`);
-    const urls = await parseYouTubePlayParameter(param);
+    const urls = await parsePlayParameter(param);
     newMessage.delete();
     if(!urls){
-        message.react('⛔').then(()=>newMessage.edit("Unable to find "+param));
+        message.react('⛔').then(()=>message.channel.send("Unable to find "+param));
         return;
     }
     if(!guildPlayers[message.guild?.id!]) await createNewGuildPlayer(message, [...urls]);

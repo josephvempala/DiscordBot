@@ -7,5 +7,6 @@ export interface IBasicVideoInfo {
 
 export enum VideoInfoType{
     Spotify,
-    YouTube
+    YouTube,
+    SoundCloud
 }
