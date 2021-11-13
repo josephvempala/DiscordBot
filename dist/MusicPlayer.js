@@ -4,6 +4,7 @@ exports.getQueue = exports.clear = exports.skip = exports.shuffle = exports.stop
 const voice_1 = require("@discordjs/voice");
 const youTube_1 = require("./youTube");
 const util_1 = require("./util");
+const IBasicVideoInfo_1 = require("./IBasicVideoInfo");
 const guildPlayers = {};
 async function createNewGuildPlayer(message, queue) {
     const guildPlayer = {
@@ -64,14 +65,10 @@ function registerGuildPlayerEventListeners(guildPlayer) {
         await playNext(guildPlayer.voiceConnection, guildPlayer.playerMessages['playRequestMessage']);
     });
 }
-async function getAudioStream(url) {
-    let stream;
-    try {
-        stream = await (0, youTube_1.getYoutubeAudioStream)(url);
-        return stream;
-    }
-    catch (e) {
-        return null;
+async function getAudioStream(info) {
+    switch (info.type) {
+        case IBasicVideoInfo_1.VideoInfoType.YouTube:
+            return await (0, youTube_1.getYoutubeAudioStream)(info.url);
     }
 }
 async function playNext(voiceConnection, message) {
@@ -80,13 +77,13 @@ async function playNext(voiceConnection, message) {
     }
     const audioToPlay = guildPlayers[message.guild?.id].queue.shift();
     guildPlayers[message.guild?.id].currentlyPlaying = audioToPlay;
-    const stream = await getAudioStream(audioToPlay.url);
+    const stream = await getAudioStream(audioToPlay);
     if (!stream) {
         await message.react('⛔');
         await message.channel.send(`Unable to play ${audioToPlay.title}`);
         return playNext(voiceConnection, message);
     }
-    const resource = (0, voice_1.createAudioResource)(stream.stream, { inputType: voice_1.StreamType.Arbitrary });
+    const resource = (0, voice_1.createAudioResource)(stream, { inputType: voice_1.StreamType.Arbitrary });
     guildPlayers[message.guild.id].player.play(resource);
     guildPlayers[message.guild?.id].playerMessages['playRequestMessage'] = await message.channel.send(`Now Playing ${audioToPlay.title}, \`[${(0, util_1.secondsToTime)(audioToPlay.length)}]\``);
 }
@@ -98,12 +95,11 @@ async function addToQueue(param, message) {
     if (guildPlayers[message.guild?.id] && guildPlayers[message.guild?.id].botLeaveTimeout) {
         clearTimeout(guildPlayers[message.guild?.id].botLeaveTimeout);
     }
-    ;
-    const newMessage = await message.channel.send(`Searching youtube for ${param}`);
+    const newMessage = await message.channel.send(`Searching for ${param}`);
     const urls = await (0, youTube_1.parseYouTubePlayParameter)(param);
     newMessage.delete();
     if (!urls) {
-        message.react('⛔').then(() => newMessage.edit("Invalid Query"));
+        message.react('⛔').then(() => newMessage.edit("Unable to find " + param));
         return;
     }
     if (!guildPlayers[message.guild?.id])
@@ -139,7 +135,7 @@ function shuffle(message) {
 }
 exports.shuffle = shuffle;
 function skip(message) {
-    if (guildPlayers[message.guild?.id].player.state.status === voice_1.AudioPlayerStatus.Playing) {
+    if (guildPlayers[message.guild?.id] && guildPlayers[message.guild?.id].player.state.status === voice_1.AudioPlayerStatus.Playing) {
         guildPlayers[message.guild?.id].player.stop();
         message.react("👍");
         return;

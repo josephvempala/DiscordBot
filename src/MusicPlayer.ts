@@ -7,28 +7,30 @@ import {
     DiscordGatewayAdapterCreator,
     joinVoiceChannel,
     StreamType,
-    VoiceConnection, VoiceConnectionStatus,
+    VoiceConnection,
+    VoiceConnectionStatus,
 } from "@discordjs/voice"
-import {basicVideoInfo, getYoutubeAudioStream, parseYouTubePlayParameter} from "./youTube";
+import {getYoutubeAudioStream, parseYouTubePlayParameter} from "./youTube";
 import {secondsToTime, shuffleArray} from "./util"
+import {IBasicVideoInfo, VideoInfoType} from "./IBasicVideoInfo";
 
 type PlayerMessageDictionary = {
     [message : string] : Message;
 }
 
 interface IGuildPlayer {
-    queue : basicVideoInfo[];
+    queue : IBasicVideoInfo[];
     player : AudioPlayer;
     voiceConnection : VoiceConnection;
     guild : Guild;
-    currentlyPlaying : basicVideoInfo | null;
+    currentlyPlaying : IBasicVideoInfo | null;
     playerMessages : PlayerMessageDictionary;
     botLeaveTimeout : NodeJS.Timeout | null;
 }
 
 const guildPlayers : {[guildId : string] : IGuildPlayer} = {};
 
-async function createNewGuildPlayer(message: Message, queue? : basicVideoInfo[]) {
+async function createNewGuildPlayer(message: Message, queue? : IBasicVideoInfo[]) {
     const guildPlayer = {
         queue : queue ? queue : [],
         player : createAudioPlayer(),
@@ -90,14 +92,10 @@ function registerGuildPlayerEventListeners(guildPlayer : IGuildPlayer){
     });
 }
 
-async function getAudioStream(url : string){
-    let stream;
-    try{
-        stream = await getYoutubeAudioStream(url);
-        return stream;
-    }
-    catch (e){
-        return null;
+async function getAudioStream(info : IBasicVideoInfo){
+    switch (info.type){
+        case VideoInfoType.YouTube:
+            return await getYoutubeAudioStream(info.url);
     }
 }
 
@@ -107,13 +105,13 @@ async function playNext(voiceConnection : VoiceConnection, message : Message) : 
     }
     const audioToPlay = guildPlayers[message.guild?.id!].queue.shift();
     guildPlayers[message.guild?.id!].currentlyPlaying = audioToPlay!;
-    const stream = await getAudioStream(audioToPlay!.url);
+    const stream = await getAudioStream(audioToPlay!);
     if(!stream){
         await message.react('⛔');
         await message.channel.send(`Unable to play ${audioToPlay!.title}`)
         return playNext(voiceConnection,message);
     }
-    const resource = createAudioResource(stream.stream, { inputType:StreamType.Arbitrary });
+    const resource = createAudioResource(stream, { inputType:StreamType.Arbitrary });
     guildPlayers[message.guild!.id].player.play(resource);
     guildPlayers[message.guild?.id!].playerMessages['playRequestMessage'] = await message.channel.send(`Now Playing ${audioToPlay!.title}, \`[${secondsToTime(audioToPlay!.length)}]\``);
 }
@@ -125,12 +123,12 @@ export async function addToQueue(param : string, message: Message){
     }
     if(guildPlayers[message.guild?.id!] && guildPlayers[message.guild?.id!].botLeaveTimeout){
         clearTimeout(guildPlayers[message.guild?.id!].botLeaveTimeout!)
-    };
-    const newMessage = await message.channel.send(`Searching youtube for ${param}`);
+    }
+    const newMessage = await message.channel.send(`Searching for ${param}`);
     const urls = await parseYouTubePlayParameter(param);
     newMessage.delete();
     if(!urls){
-        message.react('⛔').then(()=>newMessage.edit("Invalid Query"));
+        message.react('⛔').then(()=>newMessage.edit("Unable to find "+param));
         return;
     }
     if(!guildPlayers[message.guild?.id!]) await createNewGuildPlayer(message, [...urls]);
@@ -163,7 +161,7 @@ export function shuffle(message : Message) {
 }
 
 export function skip(message : Message){
-    if(guildPlayers[message.guild?.id!].player.state.status === AudioPlayerStatus.Playing)
+    if(guildPlayers[message.guild?.id!] && guildPlayers[message.guild?.id!].player.state.status === AudioPlayerStatus.Playing)
     {
         guildPlayers[message.guild?.id!].player.stop();
         message.react("👍");

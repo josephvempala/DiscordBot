@@ -1,33 +1,29 @@
 import {Readable} from "node:stream";
-import {videoInfo} from "ytdl-core";
-import {downloadFromInfo, getInfo, getBasicInfo} from 'ytdl-core-discord';
+import {downloadFromInfo, getBasicInfo, getInfo, chooseFormat} from 'ytdl-core-discord';
 import ytpl from "ytpl";
 import ytsr from "ytsr";
+import {IBasicVideoInfo, VideoInfoType} from "./IBasicVideoInfo";
 
-interface GetAudioStreamSuccess{
-    stream : Readable;
-    videoInfo: videoInfo;
-}
-
-export interface basicVideoInfo{
-    url:string,
-    title:string,
-    length:number
-}
-
-export async function getYoutubeAudioStream(url : string) : Promise<GetAudioStreamSuccess | null> {
+export async function getYoutubeAudioStream(url : string) : Promise<Readable | null> {
     try{
+        let stream : Readable;
         const videoInfo = await getInfo(url).catch(x => null);
         if(!videoInfo)
             return null;
-        const stream = downloadFromInfo(videoInfo!, {filter:"audioonly", highWaterMark: 1<<25 })
-            .on("error",(e : any)=>{
+        if(videoInfo.videoDetails.isLiveContent){
+            const format = chooseFormat(videoInfo.formats, {quality: [128,127,120,96,95,94,93]});
+            stream = downloadFromInfo(videoInfo, {highWaterMark : 1<<25, liveBuffer:4900, format:format});
+        }
+        else{
+            stream = downloadFromInfo(videoInfo, {filter:"audioonly", highWaterMark: 1<<25 });
+        }
+        stream.on("error",(e : any)=>{
                 if(e.statusCode! === 403||410){
                     return null;
                 }
                 console.log(e);
             });
-        return { stream: stream, videoInfo: videoInfo!};
+        return stream;
     }
     catch (e){
         console.error(e);
@@ -35,17 +31,17 @@ export async function getYoutubeAudioStream(url : string) : Promise<GetAudioStre
     }
 }
 
-export async function parseYouTubePlayParameter(param : string) : Promise<basicVideoInfo[] | null>{
-    const result : basicVideoInfo[] = [];
+export async function parseYouTubePlayParameter(param : string) : Promise<IBasicVideoInfo[] | null>{
+    const result : IBasicVideoInfo[] = [];
     try{
         const playlistID = await ytpl.getPlaylistID(param).catch(() => null);
         if(playlistID){
             const playlistQueryResult = await ytpl(playlistID);
-            playlistQueryResult.items.map(x => result.push({url : x.url, title : x.title, length: x.durationSec!}));
+            playlistQueryResult.items.map(x => result.push({url : x.url, title : x.title, length: x.durationSec!, type: VideoInfoType.YouTube}));
             return result;
         }
         const basicVideoInfo = await getBasicInfo(param).catch(() => null);
-        if(basicVideoInfo) return [{url: param, title: basicVideoInfo.player_response.videoDetails.title, length : +basicVideoInfo.videoDetails.lengthSeconds}];
+        if(basicVideoInfo) return [{url: param, title: basicVideoInfo.player_response.videoDetails.title, length : +basicVideoInfo.videoDetails.lengthSeconds, type: VideoInfoType.YouTube}];
         const searchStringResult = await ytsr.getFilters(param)
             .then(x => x.get('Type')!.get('Video'))
             .catch(() => null);
@@ -53,9 +49,9 @@ export async function parseYouTubePlayParameter(param : string) : Promise<basicV
             return null;
         const finalLinks = await ytsr(searchStringResult.url, {limit:1}).catch(() => null);
         if(finalLinks){
-            const link = finalLinks.items[0] as basicVideoInfo;
+            const link = finalLinks.items[0] as unknown as IBasicVideoInfo;
             const basicVideoInfo = await getBasicInfo(link.url).catch(() => null);
-            return [{url:link.url, title : link.title, length:+basicVideoInfo!.videoDetails.lengthSeconds}]
+            return [{url:link.url, title : link.title, length:+basicVideoInfo!.videoDetails.lengthSeconds, type : VideoInfoType.YouTube}]
         }
     }
     catch (e : any){
