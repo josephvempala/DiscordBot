@@ -78,7 +78,7 @@ function registerGuildPlayerEventListeners(guildPlayer : IGuildPlayer){
             guildPlayer.queue?.push(guildPlayer.currentlyPlaying!);
         }
         guildPlayer.player.stop();
-        await playNext(guildPlayer.voiceConnection, guildPlayer.playerMessages['playRequestMessage']);
+        await playNext(guildPlayer.voiceConnection, guildPlayer.playerMessages['latestToQueue']);
     });
     guildPlayer.player.addListener(AudioPlayerStatus.Idle,async () => {
         await guildPlayer.playerMessages['playRequestMessage']?.delete();
@@ -86,10 +86,10 @@ function registerGuildPlayerEventListeners(guildPlayer : IGuildPlayer){
         if (guildPlayers[guildPlayer.guild.id].queue.length <= 0) {
             guildPlayer.botLeaveTimeout = setTimeout(async () => {
                 await removeGuildPlayer(guildPlayer);
-            },30000);
+            },120000);
             return;
         }
-        await playNext(guildPlayer.voiceConnection, guildPlayer.playerMessages['playRequestMessage']);
+        await playNext(guildPlayer.voiceConnection, guildPlayer.playerMessages['latestToQueue']);
     });
 }
 
@@ -132,8 +132,13 @@ export async function addToQueue(param : string, message: Message){
         message.channel.send("Please join a voice channel to listen");
         return;
     }
-    if(guildPlayers[message.guild?.id!] && guildPlayers[message.guild?.id!].botLeaveTimeout){
-        clearTimeout(guildPlayers[message.guild?.id!].botLeaveTimeout!)
+    if(!message.guild){
+        message.channel.send("An error occurred while processing command, please try again");
+        return;
+    }
+    const guildId = message.guild.id;
+    if(guildPlayers[guildId] && guildPlayers[guildId].botLeaveTimeout){
+        clearTimeout(guildPlayers[guildId].botLeaveTimeout!)
     }
     const newMessage = await message.channel.send(`Searching for ${param}`);
     const urls = await parsePlayParameter(param);
@@ -142,20 +147,29 @@ export async function addToQueue(param : string, message: Message){
         message.react('⛔').then(()=>message.channel.send("Unable to find "+param));
         return;
     }
-    if(!guildPlayers[message.guild?.id!]) await createNewGuildPlayer(message, [...urls]);
-    else guildPlayers[message.guild?.id!].queue = [...guildPlayers[message.guild?.id!].queue, ...urls];
+    if(!guildPlayers[guildId]) await createNewGuildPlayer(message, [...urls]);
+    else guildPlayers[guildId].queue = [...guildPlayers[guildId].queue, ...urls];
+    guildPlayers[guildId].playerMessages['latestToQueue'] = message;
     if(urls.length>1) message.channel.send(`Added playlist of ${urls.length} songs to the queue`);
-    else await message.react("👍");
-    if(guildPlayers[message.guild?.id!].player.state.status === AudioPlayerStatus.Idle){
-        await playNext(guildPlayers[message.guild?.id!].voiceConnection, message);
+    else{
+        message.channel.send(`Added playlist of ${urls[0].title} queue \`[${secondsToTime(urls[0].length)}]\``);
+        await message.react("👍");
+    }
+    if(guildPlayers[guildId].player.state.status === AudioPlayerStatus.Idle){
+        await playNext(guildPlayers[guildId].voiceConnection, message);
     }
 }
 
 export function stop(message : Message) {
-    if(guildPlayers[message.guild?.id!] && guildPlayers[message.guild?.id!].player.state.status === AudioPlayerStatus.Playing)
+    if(!message.guild){
+        message.channel.send("An error occurred while processing command, please try again");
+        return;
+    }
+    const guildId = message.guild.id;
+    if(guildPlayers[guildId] && guildPlayers[guildId].player.state.status === AudioPlayerStatus.Playing)
     {
-        guildPlayers[message.guild?.id!].queue = [];
-        guildPlayers[message.guild?.id!].player.stop();
+        guildPlayers[guildId].queue = [];
+        guildPlayers[guildId].player.stop();
         message.react("👍");
         return;
     }
@@ -163,8 +177,13 @@ export function stop(message : Message) {
 }
 
 export function shuffle(message : Message) {
-    if(guildPlayers[message.guild?.id!] && guildPlayers[message.guild?.id!].queue.length>0){
-        shuffleArray(guildPlayers[message.guild?.id!].queue);
+    if(!message.guild){
+        message.channel.send("An error occurred while processing command, please try again");
+        return;
+    }
+    const guildId = message.guild.id;
+    if(guildPlayers[guildId] && guildPlayers[guildId].queue.length>0){
+        shuffleArray(guildPlayers[guildId].queue);
         message.react("👍");
         return;
     }
@@ -172,9 +191,14 @@ export function shuffle(message : Message) {
 }
 
 export function skip(message : Message){
-    if(guildPlayers[message.guild?.id!] && guildPlayers[message.guild?.id!].player.state.status === AudioPlayerStatus.Playing)
+    if(!message.guild){
+        message.channel.send("An error occurred while processing command, please try again");
+        return;
+    }
+    const guildId = message.guild.id;
+    if(guildPlayers[guildId] && guildPlayers[guildId].player.state.status === AudioPlayerStatus.Playing)
     {
-        guildPlayers[message.guild?.id!].player.stop();
+        guildPlayers[guildId].player.stop();
         message.react("👍");
         return;
     }
@@ -182,8 +206,13 @@ export function skip(message : Message){
 }
 
 export function clear(message : Message){
-    if(guildPlayers[message.guild?.id!] && guildPlayers[message.guild?.id!].queue.length>0){
-        guildPlayers[message.guild?.id!].queue = [];
+    if(!message.guild){
+        message.channel.send("An error occurred while processing command, please try again");
+        return;
+    }
+    const guildId = message.guild.id;
+    if(guildPlayers[guildId] && guildPlayers[guildId].queue.length>0){
+        guildPlayers[guildId].queue = [];
         message.react("👍");
         return;
     }
@@ -191,14 +220,19 @@ export function clear(message : Message){
 }
 
 export function getQueue(param : string, message : Message){
-    if(!guildPlayers[message.guild?.id!] || guildPlayers[message.guild?.id!].queue.length<=0){
+    if(!message.guild){
+        message.channel.send("An error occurred while processing command, please try again");
+        return;
+    }
+    const guildId = message.guild.id;
+    if(!guildPlayers[guildId] || guildPlayers[guildId].queue.length<=0){
         message.channel.send("The queue is empty");
         return;
     }
     let msg = ''
     if(!param)
     {
-        guildPlayers[message.guild?.id!].queue.slice(0, 5).forEach((x,i) => msg += `**#${i+1}** ${x.title} \`[${secondsToTime(x.length)}]\`\n`);
+        guildPlayers[guildId].queue.slice(0, 5).forEach((x,i) => msg += `**#${i+1}** ${x.title} \`[${secondsToTime(x.length)}]\`\n`);
         message.channel.send(msg);
         return;
     }
@@ -206,6 +240,6 @@ export function getQueue(param : string, message : Message){
         message.channel.send("Please enter number of queue entries to view");
         return;
     }
-    guildPlayers[message.guild?.id!].queue.slice(0, +param).forEach((x, i) => msg += `**#${i+1}** ${x.title} \`[${secondsToTime(x.length)}]\`\n`);
+    guildPlayers[guildId].queue.slice(0, +param).forEach((x, i) => msg += `**#${i+1}** ${x.title} \`[${secondsToTime(x.length)}]\`\n`);
     message.channel.send(msg);
 }

@@ -1,4 +1,4 @@
-import scdl from 'soundcloud-downloader'
+import scdl from 'soundcloud-downloader';
 import {IBasicVideoInfo, VideoInfoType} from "./IBasicVideoInfo";
 import {Readable} from "node:stream";
 
