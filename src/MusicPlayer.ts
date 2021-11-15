@@ -61,6 +61,7 @@ async function removeGuildPlayer(guildPlayer: IGuildPlayer) {
     guildPlayer.player.removeAllListeners(AudioPlayerStatus.Idle);
     guildPlayer.player.removeAllListeners("error");
     guildPlayer.voiceConnection.disconnect();
+    guildPlayer.voiceConnection.destroy();
     delete guildPlayers[guildPlayer.guild.id];
 }
 
@@ -68,12 +69,9 @@ function registerGuildPlayerEventListeners(guildPlayer: IGuildPlayer) {
     guildPlayer.voiceConnection.addListener(VoiceConnectionStatus.Disconnected, async () => {
         if (guildPlayers[guildPlayer.guild.id])
             await removeGuildPlayer(guildPlayer);
-        guildPlayer.voiceConnection.destroy();
     });
     guildPlayer.player.addListener("error", async (e: any) => {
         console.log(e);
-        await guildPlayer.playerMessages['playRequestMessage']?.delete();
-        delete guildPlayer.playerMessages['playRequestMessage'];
         if (e.message === "Status code: 403" && guildPlayer.currentlyPlaying) {
             guildPlayer.queue?.push(guildPlayer.currentlyPlaying!);
         }
@@ -151,9 +149,9 @@ export async function addToQueue(param: string, message: Message) {
     if (!guildPlayers[guildId]) await createNewGuildPlayer(message, [...urls]);
     else guildPlayers[guildId].queue = [...guildPlayers[guildId].queue, ...urls];
     guildPlayers[guildId].playerMessages['latestToQueue'] = message;
-    if (urls.length > 1) message.channel.send(`Added playlist of ${urls.length} songs to the queue \`[${secondsToTime(urls[0].length)}]\``);
+    if (urls.length > 1) message.channel.send(`Added playlist of ${urls.length} songs to the queue`);
     else {
-        message.channel.send(`Added playlist of ${urls[0].title} queue`);
+        message.channel.send(`Added playlist of ${urls[0].title} queue \`[${secondsToTime(urls[0].length)}]\``);
         await message.react("👍");
     }
     if (guildPlayers[guildId].player.state.status === AudioPlayerStatus.Idle) {
