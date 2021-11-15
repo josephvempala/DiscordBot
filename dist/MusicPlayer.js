@@ -1,5 +1,5 @@
 "use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
+Object.defineProperty(exports, "__esModule", {value: true});
 exports.getQueue = exports.clear = exports.skip = exports.shuffle = exports.stop = exports.addToQueue = void 0;
 const voice_1 = require("@discordjs/voice");
 const youTube_1 = require("./youTube");
@@ -7,6 +7,7 @@ const util_1 = require("./util");
 const IBasicVideoInfo_1 = require("./IBasicVideoInfo");
 const soundCloud_1 = require("./soundCloud");
 const guildPlayers = {};
+
 async function createNewGuildPlayer(message, queue) {
     const guildPlayer = {
         queue: queue ? queue : [],
@@ -26,6 +27,7 @@ async function createNewGuildPlayer(message, queue) {
     registerGuildPlayerEventListeners(guildPlayer);
     guildPlayer.voiceConnection.subscribe(guildPlayer.player);
 }
+
 async function removeGuildPlayer(guildPlayer) {
     for (const element in guildPlayer.playerMessages) {
         let message = guildPlayer.playerMessages[element];
@@ -38,6 +40,7 @@ async function removeGuildPlayer(guildPlayer) {
     guildPlayer.voiceConnection.disconnect();
     delete guildPlayers[guildPlayer.guild.id];
 }
+
 function registerGuildPlayerEventListeners(guildPlayer) {
     guildPlayer.voiceConnection.addListener(voice_1.VoiceConnectionStatus.Disconnected, async () => {
         if (guildPlayers[guildPlayer.guild.id])
@@ -66,6 +69,7 @@ function registerGuildPlayerEventListeners(guildPlayer) {
         await playNext(guildPlayer.voiceConnection, guildPlayer.playerMessages['latestToQueue']);
     });
 }
+
 async function getAudioStream(info) {
     switch (info.type) {
         case IBasicVideoInfo_1.VideoInfoType.YouTube:
@@ -74,6 +78,7 @@ async function getAudioStream(info) {
             return await (0, soundCloud_1.getSoundCloudAudioStream)(info.url);
     }
 }
+
 async function playNext(voiceConnection, message) {
     if (guildPlayers[message.guild?.id].queue.length <= 0) {
         return;
@@ -86,10 +91,11 @@ async function playNext(voiceConnection, message) {
         await message.channel.send(`Unable to play ${audioToPlay.title}`);
         return playNext(voiceConnection, message);
     }
-    const resource = (0, voice_1.createAudioResource)(stream, { inputType: voice_1.StreamType.Arbitrary });
+    const resource = (0, voice_1.createAudioResource)(stream, {inputType: voice_1.StreamType.Arbitrary});
     guildPlayers[message.guild.id].player.play(resource);
     guildPlayers[message.guild?.id].playerMessages['playRequestMessage'] = await message.channel.send(`Now Playing ${audioToPlay.title}, \`[${(0, util_1.secondsToTime)(audioToPlay.length)}]\``);
 }
+
 async function parsePlayParameter(param) {
     let info;
     info = await (0, soundCloud_1.parseSoundCloudPlayParameter)(param);
@@ -97,6 +103,7 @@ async function parsePlayParameter(param) {
         info = await (0, youTube_1.parseYouTubePlayParameter)(param);
     return info;
 }
+
 async function addToQueue(param, message) {
     if (!message.member.voice.channel) {
         message.channel.send("Please join a voice channel to listen");
@@ -132,7 +139,9 @@ async function addToQueue(param, message) {
         await playNext(guildPlayers[guildId].voiceConnection, message);
     }
 }
+
 exports.addToQueue = addToQueue;
+
 function stop(message) {
     if (!message.guild) {
         message.channel.send("An error occurred while processing command, please try again");
@@ -147,7 +156,9 @@ function stop(message) {
     }
     message.channel.send("I am not currently playing any music");
 }
+
 exports.stop = stop;
+
 function shuffle(message) {
     if (!message.guild) {
         message.channel.send("An error occurred while processing command, please try again");
@@ -161,7 +172,9 @@ function shuffle(message) {
     }
     message.channel.send("The queue is empty");
 }
+
 exports.shuffle = shuffle;
+
 function skip(message) {
     if (!message.guild) {
         message.channel.send("An error occurred while processing command, please try again");
@@ -175,7 +188,9 @@ function skip(message) {
     }
     message.channel.send("I am not currently playing any music");
 }
+
 exports.skip = skip;
+
 function clear(message) {
     if (!message.guild) {
         message.channel.send("An error occurred while processing command, please try again");
@@ -189,7 +204,9 @@ function clear(message) {
     }
     message.channel.send("The queue is empty");
 }
+
 exports.clear = clear;
+
 function getQueue(param, message) {
     if (!message.guild) {
         message.channel.send("An error occurred while processing command, please try again");
@@ -213,5 +230,6 @@ function getQueue(param, message) {
     guildPlayers[guildId].queue.slice(0, +param).forEach((x, i) => msg += `**#${i + 1}** ${x.title} \`[${(0, util_1.secondsToTime)(x.length)}]\`\n`);
     message.channel.send(msg);
 }
+
 exports.getQueue = getQueue;
 //# sourceMappingURL=MusicPlayer.js.map
