@@ -56,13 +56,14 @@ async function removeGuildPlayer(guildPlayer: IGuildPlayer) {
         let message = guildPlayer.playerMessages[element];
         if (message.deletable && !message.deleted) {
             await message.delete();
+            delete guildPlayer.playerMessages[element];
         }
     }
     guildPlayer.player.removeAllListeners(AudioPlayerStatus.Idle);
     guildPlayer.player.removeAllListeners("error");
+    delete guildPlayers[guildPlayer.guild.id];
     guildPlayer.voiceConnection.disconnect();
     guildPlayer.voiceConnection.destroy();
-    delete guildPlayers[guildPlayer.guild.id];
 }
 
 function registerGuildPlayerEventListeners(guildPlayer: IGuildPlayer) {

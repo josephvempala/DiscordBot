@@ -31,13 +31,14 @@ async function removeGuildPlayer(guildPlayer) {
         let message = guildPlayer.playerMessages[element];
         if (message.deletable && !message.deleted) {
             await message.delete();
+            delete guildPlayer.playerMessages[element];
         }
     }
     guildPlayer.player.removeAllListeners(voice_1.AudioPlayerStatus.Idle);
     guildPlayer.player.removeAllListeners("error");
+    delete guildPlayers[guildPlayer.guild.id];
     guildPlayer.voiceConnection.disconnect();
     guildPlayer.voiceConnection.destroy();
-    delete guildPlayers[guildPlayer.guild.id];
 }
 function registerGuildPlayerEventListeners(guildPlayer) {
     guildPlayer.voiceConnection.addListener(voice_1.VoiceConnectionStatus.Disconnected, async () => {
@@ -58,7 +59,7 @@ function registerGuildPlayerEventListeners(guildPlayer) {
         if (guildPlayers[guildPlayer.guild.id].queue.length <= 0) {
             guildPlayer.botLeaveTimeout = setTimeout(async () => {
                 await removeGuildPlayer(guildPlayer);
-            }, 120000);
+            }, 1000);
             return;
         }
         await playNext(guildPlayer.voiceConnection, guildPlayer.playerMessages['latestToQueue']);
