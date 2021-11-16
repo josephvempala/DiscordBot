@@ -1,5 +1,5 @@
 "use strict";
-Object.defineProperty(exports, "__esModule", {value: true});
+Object.defineProperty(exports, "__esModule", { value: true });
 exports.VideoInfoType = void 0;
 var VideoInfoType;
 (function (VideoInfoType) {

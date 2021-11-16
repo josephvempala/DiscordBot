@@ -151,7 +151,7 @@ export async function addToQueue(param: string, message: Message) {
     guildPlayers[guildId].playerMessages['latestToQueue'] = message;
     if (urls.length > 1) message.channel.send(`Added playlist of ${urls.length} songs to the queue`);
     else {
-        message.channel.send(`Added playlist of ${urls[0].title} queue \`[${secondsToTime(urls[0].length)}]\``);
+        message.channel.send(`Added ${urls[0].title} queue \`[${secondsToTime(urls[0].length)}]\``);
         await message.react("👍");
     }
     if (guildPlayers[guildId].player.state.status === AudioPlayerStatus.Idle) {

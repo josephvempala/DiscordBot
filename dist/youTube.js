@@ -1,14 +1,13 @@
 "use strict";
 var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : {"default": mod};
+    return (mod && mod.__esModule) ? mod : { "default": mod };
 };
-Object.defineProperty(exports, "__esModule", {value: true});
+Object.defineProperty(exports, "__esModule", { value: true });
 exports.parseYouTubePlayParameter = exports.getYoutubeAudioStream = void 0;
 const ytdl_core_discord_1 = require("ytdl-core-discord");
 const ytpl_1 = __importDefault(require("ytpl"));
 const ytsr_1 = __importDefault(require("ytsr"));
 const IBasicVideoInfo_1 = require("./IBasicVideoInfo");
-
 async function getYoutubeAudioStream(url) {
     try {
         let stream;
@@ -16,17 +15,11 @@ async function getYoutubeAudioStream(url) {
         if (!videoInfo)
             return null;
         if (videoInfo.videoDetails.isLiveContent) {
-            const format = (0, ytdl_core_discord_1.chooseFormat)(videoInfo.formats, {quality: [128, 127, 120, 96, 95, 94, 93]});
-            stream = (0, ytdl_core_discord_1.downloadFromInfo)(videoInfo, {
-                highWaterMark: 1 << 25,
-                liveBuffer: 4900,
-                format: format
-            });
-        } else {
-            stream = (0, ytdl_core_discord_1.downloadFromInfo)(videoInfo, {
-                filter: "audioonly",
-                highWaterMark: 1 << 25
-            });
+            const format = (0, ytdl_core_discord_1.chooseFormat)(videoInfo.formats, { quality: [128, 127, 120, 96, 95, 94, 93] });
+            stream = (0, ytdl_core_discord_1.downloadFromInfo)(videoInfo, { highWaterMark: 1 << 25, liveBuffer: 4900, format: format });
+        }
+        else {
+            stream = (0, ytdl_core_discord_1.downloadFromInfo)(videoInfo, { filter: "audioonly", highWaterMark: 1 << 25 });
         }
         stream.on("error", (e) => {
             if (e.statusCode === 403 || 410) {
@@ -35,14 +28,13 @@ async function getYoutubeAudioStream(url) {
             console.log(e);
         });
         return stream;
-    } catch (e) {
+    }
+    catch (e) {
         console.error(e);
         return null;
     }
 }
-
 exports.getYoutubeAudioStream = getYoutubeAudioStream;
-
 async function parseYouTubePlayParameter(param) {
     const result = [];
     try {
@@ -60,33 +52,33 @@ async function parseYouTubePlayParameter(param) {
         const basicVideoInfo = await (0, ytdl_core_discord_1.getBasicInfo)(param).catch(() => null);
         if (basicVideoInfo)
             return [{
-                url: param,
-                title: basicVideoInfo.player_response.videoDetails.title,
-                length: +basicVideoInfo.videoDetails.lengthSeconds,
-                type: IBasicVideoInfo_1.VideoInfoType.YouTube
-            }];
+                    url: param,
+                    title: basicVideoInfo.player_response.videoDetails.title,
+                    length: +basicVideoInfo.videoDetails.lengthSeconds,
+                    type: IBasicVideoInfo_1.VideoInfoType.YouTube
+                }];
         const searchStringResult = await ytsr_1.default.getFilters(param)
             .then(x => x.get('Type').get('Video'))
             .catch(() => null);
         if (!searchStringResult?.url)
             return null;
-        const finalLinks = await (0, ytsr_1.default)(searchStringResult.url, {limit: 1}).catch(() => null);
+        const finalLinks = await (0, ytsr_1.default)(searchStringResult.url, { limit: 1 }).catch(() => null);
         if (finalLinks) {
             const link = finalLinks.items[0];
             const basicVideoInfo = await (0, ytdl_core_discord_1.getBasicInfo)(link.url).catch(() => null);
             return [{
-                url: link.url,
-                title: link.title,
-                length: +basicVideoInfo.videoDetails.lengthSeconds,
-                type: IBasicVideoInfo_1.VideoInfoType.YouTube
-            }];
+                    url: link.url,
+                    title: link.title,
+                    length: +basicVideoInfo.videoDetails.lengthSeconds,
+                    type: IBasicVideoInfo_1.VideoInfoType.YouTube
+                }];
         }
-    } catch (e) {
+    }
+    catch (e) {
         console.log(e);
         return null;
     }
     return null;
 }
-
 exports.parseYouTubePlayParameter = parseYouTubePlayParameter;
 //# sourceMappingURL=youTube.js.map

@@ -1,8 +1,7 @@
 "use strict";
-Object.defineProperty(exports, "__esModule", {value: true});
+Object.defineProperty(exports, "__esModule", { value: true });
 exports.dispatcher = void 0;
 const MusicPlayer_1 = require("./MusicPlayer");
-
 async function dispatcher(message) {
     const input = message.content + ' ';
     const action = input.substring(1, input.indexOf(' ')).toLowerCase();
@@ -32,6 +31,5 @@ async function dispatcher(message) {
             return;
     }
 }
-
 exports.dispatcher = dispatcher;
 //# sourceMappingURL=Dispatcher.js.map
