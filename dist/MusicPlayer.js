@@ -59,7 +59,7 @@ function registerGuildPlayerEventListeners(guildPlayer) {
         if (guildPlayers[guildPlayer.guild.id].queue.length <= 0) {
             guildPlayer.botLeaveTimeout = setTimeout(async () => {
                 await removeGuildPlayer(guildPlayer);
-            }, 1000);
+            }, 60000);
             return;
         }
         await playNext(guildPlayer.voiceConnection, guildPlayer.playerMessages['latestToQueue']);
