@@ -1,5 +1,6 @@
 import {Message} from "discord.js";
-import {addToQueue, clear, getQueue, shuffle, skip, stop} from "./MusicPlayer";
+import {addToQueue, bbpm, clear, getNowPlaying, getQueue, shuffle, skip, stop} from "./MusicPlayer";
+import {broadcastMessage} from "./botutils";
 
 export async function dispatcher(message: Message) {
     const input = message.content + ' ';
@@ -7,7 +8,8 @@ export async function dispatcher(message: Message) {
     const param = input.substring(input.indexOf(' '), input.length).trim();
     switch (action) {
         case 'ping':
-            return message.reply('pong');
+            message.reply('pong');
+            break;
         case 'play':
         case 'p':
             return addToQueue(param, message);
@@ -26,6 +28,16 @@ export async function dispatcher(message: Message) {
         case 'queue':
         case'q':
             return getQueue(param, message);
+        case 'bbpm':
+            return bbpm(message);
+        case 'np':
+        case'nowplaying':
+            return getNowPlaying(message);
+        case'msgall':
+        {
+            if(message.author.id === '704257828080058419' || message.author.id === '266115749704105984')
+                return broadcastMessage(param);
+        }
         default:
             return;
     }

@@ -3,13 +3,14 @@ import {chooseFormat, downloadFromInfo, getBasicInfo, getInfo} from 'ytdl-core-d
 import ytpl from "ytpl";
 import ytsr from "ytsr";
 import {IBasicVideoInfo, VideoInfoType} from "./IBasicVideoInfo";
+import {GetAudioStreamResult} from "./GetAudioStreamResult";
 
-export async function getYoutubeAudioStream(url: string): Promise<Readable | null> {
+export async function getYoutubeAudioStream(url: string): Promise<GetAudioStreamResult> {
     try {
         let stream: Readable;
         const videoInfo = await getInfo(url).catch(x => null);
         if (!videoInfo)
-            return null;
+            return [null, 'Unable to get video info'];
         if (videoInfo.videoDetails.isLiveContent) {
             const format = chooseFormat(videoInfo.formats, {quality: [128, 127, 120, 96, 95, 94, 93]});
             stream = downloadFromInfo(videoInfo, {highWaterMark: 1 << 25, liveBuffer: 4900, format: format});
@@ -22,10 +23,10 @@ export async function getYoutubeAudioStream(url: string): Promise<Readable | nul
             }
             console.log(e);
         });
-        return stream;
+        return [stream, null];
     } catch (e) {
         console.error(e);
-        return null;
+        return [null, 'Error occurred while getting YouTube audio stream'];
     }
 }
 
@@ -39,7 +40,8 @@ export async function parseYouTubePlayParameter(param: string): Promise<IBasicVi
                 url: x.url,
                 title: x.title,
                 length: x.durationSec!,
-                type: VideoInfoType.YouTube
+                type: VideoInfoType.YouTube,
+                isLiveStream: x.isLive
             }));
             return result;
         }
@@ -48,7 +50,8 @@ export async function parseYouTubePlayParameter(param: string): Promise<IBasicVi
             url: param,
             title: basicVideoInfo.player_response.videoDetails.title,
             length: +basicVideoInfo.videoDetails.lengthSeconds,
-            type: VideoInfoType.YouTube
+            type: VideoInfoType.YouTube,
+            isLiveStream: +basicVideoInfo.videoDetails.lengthSeconds == 0
         }];
         const searchStringResult = await ytsr.getFilters(param)
             .then(x => x.get('Type')!.get('Video'))
@@ -63,7 +66,8 @@ export async function parseYouTubePlayParameter(param: string): Promise<IBasicVi
                 url: link.url,
                 title: link.title,
                 length: +basicVideoInfo!.videoDetails.lengthSeconds,
-                type: VideoInfoType.YouTube
+                type: VideoInfoType.YouTube,
+                isLiveStream: +basicVideoInfo!.videoDetails.lengthSeconds == 0
             }]
         }
     } catch (e: any) {
