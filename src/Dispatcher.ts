@@ -2,7 +2,7 @@ import {Message} from "discord.js";
 import {addToQueue, bbpm, clear, getNowPlaying, getQueue, shuffle, skip, stop} from "./MusicPlayer";
 import {broadcastMessage} from "./botutils";
 
-export async function dispatcher(message: Message) {
+export async function messageDispatcher(message: Message) {
     const input = message.content + ' ';
     const action = input.substring(1, input.indexOf(' ')).toLowerCase();
     const param = input.substring(input.indexOf(' '), input.length).trim();
@@ -33,10 +33,10 @@ export async function dispatcher(message: Message) {
         case 'np':
         case'nowplaying':
             return getNowPlaying(message);
-        case'msgall':
-        {
-            if(message.author.id === '704257828080058419' || message.author.id === '266115749704105984')
+        case'msgall': {
+            if (message.author.id === '704257828080058419' || message.author.id === '266115749704105984')
                 return broadcastMessage(param);
+            return;
         }
         default:
             return;

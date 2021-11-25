@@ -1,4 +1,4 @@
-import {Guild, Message} from "discord.js";
+import {Guild, GuildMember, Message, VoiceState} from "discord.js";
 import {
     AudioPlayer,
     AudioPlayerStatus,
@@ -24,19 +24,23 @@ type PlayerMessageDictionary = {
 interface IGuildPlayer {
     queue: IBasicVideoInfo[];
     player: AudioPlayer;
+    listeners: GuildMember[];
     voiceConnection: VoiceConnection;
     guild: Guild;
     currentlyPlaying: IBasicVideoInfo | null;
     playerMessages: PlayerMessageDictionary;
     botLeaveTimeout: NodeJS.Timeout | null;
+    replayRetries: number;
 }
 
 const guildPlayers: { [guildId: string]: IGuildPlayer } = {};
+const voiceChannels: { [channelId: string]: GuildMember[] } = {};
 
 async function createNewGuildPlayer(message: Message, queue?: IBasicVideoInfo[]) {
     const guildPlayer = {
         queue: queue ? queue : [],
         player: createAudioPlayer(),
+        listeners: [],
         voiceConnection: joinVoiceChannel({
             selfDeaf: true,
             channelId: message.member!.voice.channel!.id,
@@ -47,8 +51,10 @@ async function createNewGuildPlayer(message: Message, queue?: IBasicVideoInfo[])
         currentlyPlaying: null,
         playerMessages: {} as PlayerMessageDictionary,
         botLeaveTimeout: null,
+        replayRetries: 0,
     }
     guildPlayers[message.guild?.id!] = guildPlayer;
+    voiceChannels[message.member!.voice.channel!.id] = message.member!.voice.channel!.members!.map(x => x);
     registerGuildPlayerEventListeners(guildPlayer);
     guildPlayer.voiceConnection.subscribe(guildPlayer.player);
 }
@@ -73,17 +79,29 @@ function registerGuildPlayerEventListeners(guildPlayer: IGuildPlayer) {
         if (guildPlayers[guildPlayer.guild.id])
             await removeGuildPlayer(guildPlayer);
     });
+    guildPlayer.player.addListener("debug", () => {
+        console.log(new Date() + ":  " + guildPlayer.player.state.status);
+    })
     guildPlayer.player.addListener("error", async (e: any) => {
-        console.log(e);
-        if (e.message === "Status code: 403" && guildPlayer.currentlyPlaying) {
+        if (guildPlayer.playerMessages['playRequest']) {
+            await guildPlayer.playerMessages['playRequest'].delete();
+            delete guildPlayer.playerMessages['playRequest'];
+        }
+        if (e.message === "Status code: 403" && guildPlayer.currentlyPlaying && guildPlayer.replayRetries < 5) {
             guildPlayer.queue?.push(guildPlayer.currentlyPlaying!);
+            guildPlayer.replayRetries++;
+            console.log('403');
+        } else {
+            console.log(e);
         }
         guildPlayer.player.stop();
         await playNext(guildPlayer.voiceConnection, guildPlayer.playerMessages['latestToQueue']);
     });
     guildPlayer.player.addListener(AudioPlayerStatus.Idle, async () => {
-        await guildPlayer.playerMessages['playRequestMessage']?.delete();
-        delete guildPlayer.playerMessages['playRequestMessage'];
+        if (guildPlayer.playerMessages['playRequest']) {
+            await guildPlayer.playerMessages['playRequest'].delete();
+            delete guildPlayer.playerMessages['playRequest'];
+        }
         if (guildPlayers[guildPlayer.guild.id].queue.length <= 0) {
             guildPlayer.botLeaveTimeout = setTimeout(async () => {
                 await removeGuildPlayer(guildPlayer);
@@ -91,6 +109,12 @@ function registerGuildPlayerEventListeners(guildPlayer: IGuildPlayer) {
             return;
         }
         await playNext(guildPlayer.voiceConnection, guildPlayer.playerMessages['latestToQueue']);
+    });
+    guildPlayer.player.addListener(AudioPlayerStatus.Playing, async () => {
+        guildPlayer.replayRetries = 0;
+        guildPlayer.playerMessages['playRequest'] = await guildPlayer
+            .playerMessages['latestToQueue'].channel
+            .send(`Now Playing ${guildPlayer.currentlyPlaying!.title}, \`[${guildPlayer.currentlyPlaying!.isLiveStream ? "LIVE 🔴" : secondsToTime(guildPlayer.currentlyPlaying!.length)}]\``);
     });
 }
 
@@ -121,7 +145,6 @@ async function playNext(voiceConnection: VoiceConnection, message: Message): Pro
     }
     const resource = createAudioResource(stream[0], {inputType: StreamType.Arbitrary});
     guildPlayers[guildId].player.play(resource);
-    guildPlayers[guildId].playerMessages['playRequestMessage'] = await message.channel.send(`Now Playing ${audioToPlay!.title}, \`[${audioToPlay!.isLiveStream? "LIVE 🔴" :secondsToTime(audioToPlay!.length)}]\``);
 }
 
 async function parsePlayParameter(param: string) {
@@ -159,11 +182,24 @@ export async function addToQueue(param: string, message: Message) {
     guildPlayers[guildId].playerMessages['latestToQueue'] = message;
     if (urls.length > 1) message.channel.send(`Added playlist of ${urls.length} songs to the queue`);
     else {
-        message.channel.send(`Added ${urls[0].title} queue \`[${urls[0].isLiveStream? "LIVE 🔴" :secondsToTime(urls[0].length)}]\``);
+        message.channel.send(`Added ${urls[0].title} queue \`[${urls[0].isLiveStream ? "LIVE 🔴" : secondsToTime(urls[0].length)}]\``);
         await message.react("👍");
     }
     if (guildPlayers[guildId].player.state.status === AudioPlayerStatus.Idle) {
         await playNext(guildPlayers[guildId].voiceConnection, message);
+    }
+}
+
+export async function voiceChannelChange(oldState: VoiceState, newState: VoiceState) {
+    if (voiceChannels[newState.id]) {
+        voiceChannels[newState.id].push(newState.member!);
+    }
+    if (voiceChannels[oldState.id] && newState.channel != oldState.channel) {
+        const newVoiceChannelMembers = voiceChannels[oldState.id].filter(x => x != oldState.member);
+        voiceChannels[oldState.id] = newVoiceChannelMembers;
+        if (newVoiceChannelMembers.length == 0) {
+            await removeGuildPlayer(guildPlayers[oldState.guild.id]);
+        }
     }
 }
 
@@ -236,7 +272,7 @@ export function getQueue(param: string, message: Message) {
     }
     let msg = ''
     if (!param) {
-        guildPlayers[guildId].queue.slice(0, 5).forEach((x, i) => msg += `**#${i + 1}** ${x.title} \`[${x.isLiveStream? "LIVE 🔴" :(x.length)}]\`\n`);
+        guildPlayers[guildId].queue.slice(0, 5).forEach((x, i) => msg += `**#${i + 1}** ${x.title} \`[${x.isLiveStream ? "LIVE 🔴" : (x.length)}]\`\n`);
         message.channel.send(msg);
         return;
     }
@@ -244,19 +280,19 @@ export function getQueue(param: string, message: Message) {
         message.channel.send("Please enter number of queue entries to view");
         return;
     }
-    guildPlayers[guildId].queue.slice(0, +param).forEach((x, i) => msg += `**#${i + 1}** ${x.title} \`[${x.isLiveStream? "LIVE 🔴" :(x.length)}]\`\n`);
+    guildPlayers[guildId].queue.slice(0, +param).forEach((x, i) => msg += `**#${i + 1}** ${x.title} \`[${x.isLiveStream ? "LIVE 🔴" : (x.length)}]\`\n`);
     message.channel.send(msg);
 }
 
-export async function bbpm(message : Message){
+export async function bbpm(message: Message) {
     await addToQueue('https://mixlr.com/rjlee27/', message);
 }
 
-export function getNowPlaying(message : Message){
+export function getNowPlaying(message: Message) {
     const currentlyPlaying = guildPlayers[message.guild?.id!].currentlyPlaying;
-    if(!currentlyPlaying){
+    if (!currentlyPlaying) {
         message.channel.send("I am not currently playing any music");
         return;
     }
-    message.channel.send(`${currentlyPlaying.title} \`[${currentlyPlaying.isLiveStream? "LIVE 🔴" :(currentlyPlaying.length)}]\`\n`);
+    message.channel.send(`${currentlyPlaying.title} \`[${currentlyPlaying.isLiveStream ? "LIVE 🔴" : (currentlyPlaying.length)}]\`\n`);
 }
