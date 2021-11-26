@@ -34,7 +34,7 @@ interface IGuildPlayer {
 }
 
 const guildPlayers: { [guildId: string]: IGuildPlayer } = {};
-const voiceChannels: { [channelId: string]: GuildMember[] } = {};
+const voiceChannels = new Map<string, Map<string,GuildMember>>();
 
 async function createNewGuildPlayer(message: Message, queue?: IBasicVideoInfo[]) {
     const guildPlayer = {
@@ -54,7 +54,11 @@ async function createNewGuildPlayer(message: Message, queue?: IBasicVideoInfo[])
         replayRetries: 0,
     }
     guildPlayers[message.guild?.id!] = guildPlayer;
-    voiceChannels[message.member!.voice.channel!.id] = message.member!.voice.channel!.members!.map(x => x);
+    const voiceChannelMap = new Map<string, GuildMember>();
+    message.member!.voice.channel!.members!.forEach(x => {
+        voiceChannelMap.set(x.id, x);
+    });
+    voiceChannels.set(message.member!.voice.channel!.id, voiceChannelMap);
     registerGuildPlayerEventListeners(guildPlayer);
     guildPlayer.voiceConnection.subscribe(guildPlayer.player);
 }
@@ -191,15 +195,21 @@ export async function addToQueue(param: string, message: Message) {
 }
 
 export async function voiceChannelChange(oldState: VoiceState, newState: VoiceState) {
-    if (voiceChannels[newState.id]) {
-        voiceChannels[newState.id].push(newState.member!);
-    }
-    if (voiceChannels[oldState.id] && newState.channel != oldState.channel) {
-        const newVoiceChannelMembers = voiceChannels[oldState.id].filter(x => x != oldState.member);
-        voiceChannels[oldState.id] = newVoiceChannelMembers;
-        if (newVoiceChannelMembers.length == 0) {
-            await removeGuildPlayer(guildPlayers[oldState.guild.id]);
+    const oldStateId = oldState.channelId;
+    const newStateId = newState.channelId;
+    if(oldStateId && voiceChannels.has(oldStateId)){
+        const voiceChannelMemberMap = voiceChannels.get(oldStateId);
+        if(voiceChannelMemberMap && voiceChannelMemberMap.has(oldState.member!.id)){
+            const memberGuildId = voiceChannelMemberMap.get(oldState.member!.id)!.guild.id;
+            voiceChannelMemberMap.delete(oldState.member!.id);
+            if(voiceChannelMemberMap.size == 1){
+                guildPlayers[memberGuildId].playerMessages['latestToQueue'].channel.send("All members left voice channel. Player stopped.")
+                await removeGuildPlayer(guildPlayers[memberGuildId]);
+            }
         }
+    }
+    if(newStateId && voiceChannels.has(newStateId)){
+        voiceChannels.get(newStateId)!.set(newState.member!.id, newState.member!);
     }
 }
 

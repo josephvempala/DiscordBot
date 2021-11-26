@@ -3,6 +3,7 @@ import axios from 'axios';
 import {Readable} from "node:stream";
 import {GetAudioStreamResult} from "./GetAudioStreamResult";
 import {IBasicVideoInfo, VideoInfoType} from "./IBasicVideoInfo";
+import {timer} from "./util";
 
 const urlValidationRegex = /(?:https?:\/\/)?(?:www\.)?(mixlr\.com\/[^\/]*?\/\B)/gm;
 
@@ -13,6 +14,7 @@ export async function getMixlrAudioStream(url: string): Promise<GetAudioStreamRe
             console.log(x);
             return null;
         });
+        await timer(100*i);
     }
     if (!metadata) {
         return [null, 'Unable to find stream'];
@@ -32,13 +34,22 @@ export async function parseMixlrPlayParameter(url: string): Promise<IBasicVideoI
     if (!urlMatch) {
         return null;
     }
-    const result = await axios.get(`https://${urlMatch[1]}`);
+    let result;
+    for (let i = 0; i < 5 && !result; i++) {
+        result = await axios.get(`https://${urlMatch[1]}`).catch(x => {
+            console.log(x);
+            return null;
+        });
+        await timer(100*i);
+    }
+    if(!result){
+        return null;
+    }
     const userId = /({"id":)(\d*?),/.exec(result.data);
-    const playUrl = `https://api.mixlr.com/users/${userId![1]}?source=embed`;
-    const apiResult = await axios.get(playUrl);
+    const playUrl = `https://api.mixlr.com/users/${userId![2]}?source=embed`;
     return [{
         url: playUrl,
-        title: apiResult.data.slug,
+        title: "Mixlr Stream",
         type: VideoInfoType.Mixlr,
         length: 0,
         isLiveStream: true
