@@ -64,6 +64,11 @@ async function createNewGuildPlayer(message: Message, queue?: IBasicVideoInfo[])
 }
 
 async function removeGuildPlayer(guildPlayer: IGuildPlayer) {
+    if(!guildPlayers[guildPlayer.guild.id]){
+        return;
+    }
+    delete guildPlayers[guildPlayer.guild.id];
+    voiceChannels.delete(guildPlayer.guild.id);
     clearTimeout(guildPlayer.botLeaveTimeout!);
     for (const element in guildPlayer.playerMessages) {
         let message = guildPlayer.playerMessages[element];
@@ -73,16 +78,17 @@ async function removeGuildPlayer(guildPlayer: IGuildPlayer) {
         }
     }
     guildPlayer.player.removeAllListeners(AudioPlayerStatus.Idle);
+    guildPlayer.player.removeAllListeners(AudioPlayerStatus.Playing);
     guildPlayer.player.removeAllListeners("error");
-    delete guildPlayers[guildPlayer.guild.id];
+    guildPlayer.player.removeAllListeners("debug");
+    guildPlayer.voiceConnection.removeAllListeners(VoiceConnectionStatus.Disconnected);
     guildPlayer.voiceConnection.disconnect();
     guildPlayer.voiceConnection.destroy();
 }
 
 function registerGuildPlayerEventListeners(guildPlayer: IGuildPlayer) {
     guildPlayer.voiceConnection.addListener(VoiceConnectionStatus.Disconnected, async () => {
-        if (guildPlayers[guildPlayer.guild.id])
-            await removeGuildPlayer(guildPlayer);
+        await removeGuildPlayer(guildPlayer);
     });
     guildPlayer.player.addListener("debug", () => {
         console.log(new Date() + ":  " + guildPlayer.player.state.status);
@@ -109,8 +115,7 @@ function registerGuildPlayerEventListeners(guildPlayer: IGuildPlayer) {
         }
         if (guildPlayers[guildPlayer.guild.id].queue.length <= 0) {
             guildPlayer.botLeaveTimeout = setTimeout(async () => {
-                if (guildPlayers[guildPlayer.guild.id])
-                    await removeGuildPlayer(guildPlayer);
+                await removeGuildPlayer(guildPlayer);
             }, 600000);
             return;
         }
@@ -211,7 +216,6 @@ export async function voiceChannelChange(oldState: VoiceState, newState: VoiceSt
             const memberGuildPlayer = guildPlayers[voiceChannelMemberMap.get(oldState.member!.id)!.guild.id];
             voiceChannelMemberMap.delete(oldState.member!.id);
             if (memberGuildPlayer && voiceChannelMemberMap.size === 1) {
-                memberGuildPlayer.playerMessages['latestToQueue'].channel.send("All members left voice channel. Player stopped.")
                 await removeGuildPlayer(memberGuildPlayer);
             }
         }
@@ -316,6 +320,5 @@ export function getNowPlaying(message: Message) {
 }
 
 export async function leave(message: Message) {
-    if (guildPlayers[message.guild!.id])
-        await removeGuildPlayer(guildPlayers[message.guild?.id!]);
+    await removeGuildPlayer(guildPlayers[message.guild?.id!]);
 }
