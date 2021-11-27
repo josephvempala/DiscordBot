@@ -53,6 +53,15 @@ export async function parseYouTubePlayParameter(param: string): Promise<IBasicVi
             type: VideoInfoType.YouTube,
             isLiveStream: +basicVideoInfo.videoDetails.lengthSeconds == 0
         }];
+    } catch (e: any) {
+        console.log(e);
+        return null;
+    }
+    return null;
+}
+
+export async function getYoutubeSearchResult(param: string): Promise<IBasicVideoInfo[] | null> {
+    try {
         const searchStringResult = await ytsr.getFilters(param)
             .then(x => x.get('Type')!.get('Video'))
             .catch(() => null);

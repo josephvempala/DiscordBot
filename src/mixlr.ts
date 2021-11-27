@@ -14,7 +14,7 @@ export async function getMixlrAudioStream(url: string): Promise<GetAudioStreamRe
             console.log(x);
             return null;
         });
-        await timer(100*i);
+        await timer(100 * i);
     }
     if (!metadata) {
         return [null, 'Unable to find stream'];
@@ -40,9 +40,9 @@ export async function parseMixlrPlayParameter(url: string): Promise<IBasicVideoI
             console.log(x);
             return null;
         });
-        await timer(100*i);
+        await timer(100 * i);
     }
-    if(!result){
+    if (!result) {
         return null;
     }
     const userId = /({"id":)(\d*?),/.exec(result.data);
