@@ -306,3 +306,7 @@ export function getNowPlaying(message: Message) {
     }
     message.channel.send(`${currentlyPlaying.title} \`[${currentlyPlaying.isLiveStream ? "LIVE 🔴" : (currentlyPlaying.length)}]\`\n`);
 }
+
+export async function leave(message : Message){
+    await removeGuildPlayer(guildPlayers[message.guild?.id!]);
+}

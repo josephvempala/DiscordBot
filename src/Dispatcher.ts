@@ -1,5 +1,5 @@
 import {Message} from "discord.js";
-import {addToQueue, bbpm, clear, getNowPlaying, getQueue, shuffle, skip, stop} from "./MusicPlayer";
+import {addToQueue, bbpm, clear, getNowPlaying, getQueue, leave, shuffle, skip, stop} from "./MusicPlayer";
 import {broadcastMessage} from "./botutils";
 
 export async function messageDispatcher(message: Message) {
@@ -33,6 +33,9 @@ export async function messageDispatcher(message: Message) {
         case 'np':
         case'nowplaying':
             return getNowPlaying(message);
+        case 'l':
+        case 'leave':
+            return leave(message);
         case'msgall': {
             if (message.author.id === '704257828080058419' || message.author.id === '266115749704105984')
                 return broadcastMessage(param);
