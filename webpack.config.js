@@ -9,7 +9,6 @@ module.exports = {
     resolve:{
         extensions: ['.ts','.js','.json'],
         mainFields: ["main"],
-
     },
     stats: 'errors-only',
     module:{
