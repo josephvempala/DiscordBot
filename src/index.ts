@@ -25,7 +25,7 @@ createServer((req, res) => {
         "</html>"
     );
     res.end()
-}).listen(process.env.PORT || 5000);
+}).listen(process.env.PORT || 5001);
 
 export const client = new Client({intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.GUILD_MESSAGES, Intents.FLAGS.GUILD_VOICE_STATES]});
 

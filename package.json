@@ -4,9 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "compile-typescript": "tsc --skipLibCheck",
-    "start": "npm run compile-typescript && node ./dist/index.js"
+    "build": "webpack --color --progress",
+    "start": "webpack --color --progress --watch --hot"
   },
   "author": "",
   "license": "ISC",
@@ -18,11 +17,17 @@
     "ffmpeg-static": "^4.4.0",
     "libsodium-wrappers": "^0.7.9",
     "miniget": "^4.2.1",
-    "node": "^16.13.0",
     "soundcloud-downloader": "^1.0.0",
-    "typescript": "^4.5.2",
     "ytdl-core-discord": "^1.3.1",
     "ytpl": "^2.2.3",
     "ytsr": "^3.5.3"
+  },
+  "devDependencies": {
+    "esbuild-loader": "^2.16.0",
+    "fork-ts-checker-webpack-plugin": "^6.4.2",
+    "nodemon-webpack-plugin": "^4.6.0",
+    "typescript": "^4.5.2",
+    "webpack": "^5.64.4",
+    "webpack-cli": "^4.9.1"
   }
 }
