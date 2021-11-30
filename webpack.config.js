@@ -3,7 +3,7 @@ const NodemonPlugin = require('nodemon-webpack-plugin');
 const path = require('path');
 
 module.exports = {
-    mode : 'development',
+    mode : process.env.NODE_ENV || 'production',
     target: 'node',
     entry: './src/index.ts',
     resolve:{
@@ -18,7 +18,7 @@ module.exports = {
                 loader: 'esbuild-loader',
                 options: {
                     loader : 'tsx',
-                    target: 'es2018'
+                    target: 'esnext'
                 },
                 exclude : /node_modules/,
             }
