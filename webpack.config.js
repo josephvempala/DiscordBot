@@ -2,8 +2,9 @@ const ForkTsCheckerPlugin = require('fork-ts-checker-webpack-plugin');
 const NodemonPlugin = require('nodemon-webpack-plugin');
 const path = require('path');
 
+const mode = process.env.NODE_ENV || 'PRODUCTION';
 module.exports = {
-    mode : 'development',
+    mode : mode.toLowerCase(),
     target: 'node',
     entry: './src/index.ts',
     resolve:{
@@ -18,7 +19,7 @@ module.exports = {
                 loader: 'esbuild-loader',
                 options: {
                     loader : 'tsx',
-                    target: 'es2018'
+                    target: 'esnext'
                 },
                 exclude : /node_modules/,
             }
