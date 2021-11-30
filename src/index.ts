@@ -34,7 +34,7 @@ client.on("ready", () => {
 });
 
 client.on("messageCreate", (message) => {
-    if (message.content.startsWith('-')) {
+    if (message.content.startsWith('-') && !message.author.bot && message.guildId) {
         messageDispatcher(message).catch(x => console.log(x));
     }
 });
