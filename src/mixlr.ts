@@ -22,7 +22,7 @@ export async function getMixlrAudioStream(url: string): Promise<GetAudioStreamRe
     if (!metadata.data.is_live) {
         return [null, 'Stream is currently not live'];
     }
-    const readable = miniget(metadata.data.current_broadcast.streams.progressive.url, {maxRetries: 10}) as Readable;
+    const readable = miniget(metadata.data.current_broadcast.streams.progressive.url, { maxRetries: 10, maxReconnects:10, highWaterMark: 1 << 25 }) as Readable;
     if (readable) {
         return [readable, null];
     }
