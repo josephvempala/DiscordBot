@@ -121,7 +121,7 @@ function registerGuildPlayerEventListeners(guildPlayer: IGuildPlayer) {
     });
     guildPlayer.player.addListener(AudioPlayerStatus.Playing, async (oldState) => {
         guildPlayer.replayRetries = 0;
-        if (oldState.status === AudioPlayerStatus.AutoPaused) return;
+        if (oldState.status === AudioPlayerStatus.AutoPaused || oldState.status === AudioPlayerStatus.Paused) return;
         const newPlayingMessage = `Now Playing ${guildPlayer.currentlyPlaying!.title}, \`[${guildPlayer.currentlyPlaying!.isLiveStream ? "LIVE 🔴" : secondsToTime(guildPlayer.currentlyPlaying!.length)}]\``;
         guildPlayer.playerMessages['playRequest'] = await guildPlayer
             .playerMessages['latestToQueue'].channel
@@ -172,7 +172,10 @@ export async function addToQueue(param: string, message: Message) {
         return;
     }
     let guildPlayer = guildPlayers[message.guildId!];
-    if (guildPlayer && guildPlayer.botLeaveTimeout) clearTimeout(guildPlayer.botLeaveTimeout!)
+    if (guildPlayer && guildPlayer.botLeaveTimeout){ 
+        clearTimeout(guildPlayer.botLeaveTimeout!);
+        guildPlayer.botLeaveTimeout = null;
+    }
     let urls = await parsePlayParameter(param);
     if (!urls) {
         const newMessage = await message.channel.send(`Searching for ${param}`);
