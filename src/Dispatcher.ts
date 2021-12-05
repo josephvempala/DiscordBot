@@ -1,5 +1,16 @@
 import {Message} from "discord.js";
-import {addToQueue, bbpm, clear, getNowPlaying, getQueue, leave, shuffle, skip, stop} from "./MusicPlayer";
+import {
+    addToQueue,
+    bbpm,
+    clear,
+    getNowPlaying,
+    getQueue,
+    leave, pause,
+    playDispatcher,
+    shuffle,
+    skip,
+    stop
+} from "./MusicPlayer";
 import {broadcastMessage} from "./botutils";
 
 export async function messageDispatcher(message: Message) {
@@ -12,7 +23,9 @@ export async function messageDispatcher(message: Message) {
             break;
         case 'play':
         case 'p':
-            return addToQueue(param, message);
+            return playDispatcher(message, param);
+        case 'pause':
+            return pause(message);
         case 'stop':
         case 'st':
             return stop(message);
