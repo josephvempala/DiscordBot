@@ -1,14 +1,14 @@
 import {Readable} from "node:stream";
 import {chooseFormat, downloadFromInfo, getBasicInfo, getInfo} from 'ytdl-core-discord';
 import ytpl from "ytpl";
-import ytsr from "ytsr";
+import ytsr, {Video} from "ytsr";
 import {IBasicVideoInfo, VideoInfoType} from "./IBasicVideoInfo";
 import {GetAudioStreamResult} from "./GetAudioStreamResult";
 
 export async function getYoutubeAudioStream(url: string): Promise<GetAudioStreamResult> {
     try {
         let stream: Readable;
-        const videoInfo = await getInfo(url).catch(x => null);
+        const videoInfo = await getInfo(url).catch(() => null);
         if (!videoInfo)
             return [null, 'Unable to get video info'];
         if (videoInfo.videoDetails.isLiveContent) {
@@ -53,6 +53,35 @@ export async function parseYouTubePlayParameter(param: string): Promise<IBasicVi
             type: VideoInfoType.YouTube,
             isLiveStream: +basicVideoInfo.videoDetails.lengthSeconds == 0
         }];
+    } catch (e: any) {
+        console.log(e);
+        return null;
+    }
+    return null;
+}
+
+export async function getYoutubeSearchResultInfo(param: string) {
+    try {
+        const searchStringResult = await ytsr.getFilters(param)
+            .then(x => x.get('Type')!.get('Video'))
+            .catch(() => null);
+        if (!searchStringResult?.url)
+            return null;
+        const finalLinks = await ytsr(searchStringResult.url, {limit: 5}).catch(() => null);
+        if (finalLinks) {
+            const items = finalLinks.items.map(async (x) => {
+                const item = x as Video;
+                const basicVideoInfo = await getBasicInfo(item.url).catch(() => null);
+                return {
+                    url: item.url,
+                    title: item.title,
+                    length: +basicVideoInfo!.videoDetails.lengthSeconds,
+                    type: VideoInfoType.YouTube,
+                    isLiveStream: +basicVideoInfo!.videoDetails.lengthSeconds == 0
+                } as IBasicVideoInfo;
+            });
+            return await Promise.all(items);
+        }
     } catch (e: any) {
         console.log(e);
         return null;

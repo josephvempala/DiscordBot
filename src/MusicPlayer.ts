@@ -10,7 +10,12 @@ import {
     VoiceConnection,
     VoiceConnectionStatus,
 } from "@discordjs/voice"
-import {getYoutubeAudioStream, getYoutubeSearchResult, parseYouTubePlayParameter} from "./youTube";
+import {
+    getYoutubeAudioStream,
+    getYoutubeSearchResult,
+    getYoutubeSearchResultInfo,
+    parseYouTubePlayParameter
+} from "./youTube";
 import {isValidURL, secondsToTime, shuffleArray, timer} from "./util"
 import {IBasicVideoInfo, VideoInfoType} from "./IBasicVideoInfo";
 import {getSoundCloudAudioStream, parseSoundCloudPlayParameter} from "./soundCloud";
@@ -33,9 +38,9 @@ interface IGuildPlayer {
     currentlyPlaying: IBasicVideoInfo | null;
     playerMessages: PlayerMessageDictionary;
     botLeaveTimeout: NodeJS.Timeout | null;
-    voiceChannelMembers : Map<MemberId, GuildMember>;
+    voiceChannelMembers: Map<MemberId, GuildMember>;
     replayRetries: number;
-    playSearch: boolean;
+    playSearch: IBasicVideoInfo[] | null;
 }
 
 const guildPlayers: { [guildId: GuildId]: IGuildPlayer } = {};
@@ -54,10 +59,12 @@ function createNewGuildPlayer(message: Message, queue?: IBasicVideoInfo[]) {
         guild: message.member?.guild!,
         currentlyPlaying: null,
         playerMessages: {} as PlayerMessageDictionary,
-        botLeaveTimeout: null,
-        voiceChannelMembers : new Map<MemberId, GuildMember>(),
+        botLeaveTimeout: setTimeout(async () => {
+            await removeGuildPlayer(guildPlayer);
+        }, 600000),
+        voiceChannelMembers: new Map<MemberId, GuildMember>(),
         replayRetries: 0,
-        playSearch: false
+        playSearch: null
     }
     guildPlayers[message.guildId!] = guildPlayer;
     message.member!.voice.channel!.members!.forEach(x => {
@@ -72,7 +79,7 @@ async function removeGuildPlayer(guildPlayer: IGuildPlayer) {
     if (!guildPlayers[guildPlayer.guild.id]) return;
     delete guildPlayers[guildPlayer.guild.id];
     clearTimeout(guildPlayer.botLeaveTimeout!);
-    guildPlayer.botLeaveTimeout=null;
+    guildPlayer.botLeaveTimeout = null;
     for (const element in guildPlayer.playerMessages) {
         let message = guildPlayer.playerMessages[element];
         if (message.deletable && !message.deleted) {
@@ -98,7 +105,7 @@ function registerGuildPlayerEventListeners(guildPlayer: IGuildPlayer) {
             delete guildPlayer.playerMessages['playRequest'];
         }
         if (e.message === "Status code: 403" && guildPlayer.currentlyPlaying && guildPlayer.replayRetries < 5) {
-            await timer(100*guildPlayer.replayRetries);
+            await timer(100 * guildPlayer.replayRetries);
             guildPlayer.queue?.unshift(guildPlayer.currentlyPlaying!);
             guildPlayer.replayRetries++;
             console.log('403');
@@ -168,25 +175,30 @@ async function parsePlayParameter(param: string) {
     return info;
 }
 
-export async function playDispatcher(message :Message, param : string){
+export async function playDispatcher(message: Message, param: string) {
     const guildPlayer = guildPlayers[message.guildId!];
-    if(!param && guildPlayer && guildPlayer.player.state.status === AudioPlayerStatus.Paused){
+    const searchResults = guildPlayer.playSearch ? [...guildPlayer.playSearch] : null;
+    guildPlayer.playSearch = null;
+    if (!param && guildPlayer && guildPlayer.player.state.status === AudioPlayerStatus.Paused) {
         guildPlayer.player.unpause();
         message.channel.send(`Resumed ${guildPlayer.currentlyPlaying!.title}`);
         return;
     }
-    if(isNaN(+param)){
+    if (isNaN(+param)) {
         await addToQueue(param, message);
         return;
     }
-    if(+param < guildPlayer.queue.length){
+    if (+param && searchResults) {
+        await addToQueue(searchResults[+param - 1].url, message);
+        return;
+    }
+    if (+param < guildPlayer.queue.length) {
         const songPointer = +param - 2;
-        if(songPointer === -1 && guildPlayer.currentlyPlaying){ 
+        if (songPointer === -1 && guildPlayer.currentlyPlaying) {
             guildPlayer.queue.unshift(guildPlayer.currentlyPlaying);
-        }
-        else{
+        } else {
             const targetSong = guildPlayer.queue[songPointer];
-            guildPlayer.queue = guildPlayer.queue.filter((x,index) => index != songPointer);
+            guildPlayer.queue = guildPlayer.queue.filter((x, index) => index != songPointer);
             guildPlayer.queue.unshift(targetSong);
         }
         await playNext(guildPlayer.voiceConnection, message);
@@ -195,13 +207,31 @@ export async function playDispatcher(message :Message, param : string){
     message.channel.send(`Song number ${param} is not valid`);
 }
 
+export async function search(message: Message, param: string) {
+    if (!message.member!.voice.channel) {
+        message.channel.send("Please join a voice channel to listen");
+        return;
+    }
+    if (!guildPlayers[message.guildId!]) createNewGuildPlayer(message);
+    const guildPlayer = guildPlayers[message.guildId!];
+    const newMessage = await message.channel.send(`Searching for ${param}`);
+    guildPlayer.playSearch = await getYoutubeSearchResultInfo(param);
+    newMessage.delete();
+    if (!guildPlayer.playSearch) {
+        message.channel.send(`unable to get search results for ${param}`);
+    }
+    let msg = '**Please select a track with the -p 1-5 command**\n';
+    guildPlayer.playSearch!.forEach((x, i) => msg += `**#${i + 1}** ${x.title} \`[${x.isLiveStream ? "LIVE 🔴" : secondsToTime(x.length)}]\`\n`);
+    message.channel.send(msg);
+}
+
 export async function addToQueue(param: string, message: Message) {
     if (!message.member!.voice.channel) {
         message.channel.send("Please join a voice channel to listen");
         return;
     }
     let guildPlayer = guildPlayers[message.guildId!];
-    if (guildPlayer && guildPlayer.botLeaveTimeout){ 
+    if (guildPlayer && guildPlayer.botLeaveTimeout) {
         clearTimeout(guildPlayer.botLeaveTimeout!);
         guildPlayer.botLeaveTimeout = null;
     }
@@ -246,7 +276,7 @@ export async function voiceChannelChange(oldState: VoiceState, newState: VoiceSt
     }
     if (newChannelId && newGuildPlayer) {
         newGuildPlayer.voiceChannelMembers.set(newState.member!.id, newState.member!);
-        if(newGuildPlayer.voiceChannelMembers.size === 2 && oldGuildPlayer.botLeaveTimeout && newGuildPlayer.player.state.status === AudioPlayerStatus.Paused) {
+        if (newGuildPlayer.voiceChannelMembers.size === 2 && oldGuildPlayer.botLeaveTimeout && newGuildPlayer.player.state.status === AudioPlayerStatus.Paused) {
             clearTimeout(oldGuildPlayer.botLeaveTimeout!);
             oldGuildPlayer.botLeaveTimeout = null;
             newGuildPlayer.player.unpause();
@@ -298,7 +328,7 @@ export function clear(message: Message) {
 
 export function getQueue(param: string, message: Message) {
     const guildPlayer = guildPlayers[message.guildId!];
-    if (!guildPlayer || guildPlayer.queue.length <= 0) {
+    if (!guildPlayer || guildPlayer.queue.length <= 0 && !guildPlayer.currentlyPlaying) {
         message.channel.send("The queue is empty");
         return;
     }
@@ -312,12 +342,22 @@ export function getQueue(param: string, message: Message) {
         message.channel.send("Please enter number of queue entries to view");
         return;
     }
-    guildPlayer.queue.slice(0, +param).forEach((x, i) => msg += `**#${i + 2}** ${x.title} \`[${x.isLiveStream ? "LIVE 🔴" : secondsToTime(x.length)}]\`\n`);
+    const queueSlice = guildPlayer.queue.slice(0, +param);
+    let i = 2;
+    for (const x of queueSlice) {
+        if (msg.length > 3500) {
+            return;
+        }
+        msg += `**#${i}** ${x.title} \`[${x.isLiveStream ? "LIVE 🔴" : secondsToTime(x.length)}]\`\n`;
+        i++;
+    }
+    message.react("👍");
     message.channel.send(msg);
 }
 
 export async function bbpm(message: Message) {
     await addToQueue('https://mixlr.com/rjlee27/', message);
+    await message.react("👍");
 }
 
 export function getNowPlaying(message: Message) {
@@ -327,16 +367,19 @@ export function getNowPlaying(message: Message) {
         return;
     }
     message.channel.send(`${currentlyPlaying.title} \`[${currentlyPlaying.isLiveStream ? "LIVE 🔴" : secondsToTime(currentlyPlaying.length)}]\`\n`);
+    message.react("👍");
 }
 
-export function pause(message: Message){
+export function pause(message: Message) {
     const guildPlayer = guildPlayers[message.guildId!];
-    if(guildPlayer.player.state.status === AudioPlayerStatus.Playing){
+    if (guildPlayer.player.state.status === AudioPlayerStatus.Playing) {
         guildPlayer.player.pause();
         message.channel.send(`paused ${guildPlayer.currentlyPlaying!.title}`);
     }
+    message.react("👍");
 }
 
 export async function leave(message: Message) {
     await removeGuildPlayer(guildPlayers[message.guildId!]);
+    await message.react("👋");
 }

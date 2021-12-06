@@ -1,12 +1,13 @@
 import {Message} from "discord.js";
 import {
-    addToQueue,
     bbpm,
     clear,
     getNowPlaying,
     getQueue,
-    leave, pause,
+    leave,
+    pause,
     playDispatcher,
+    search,
     shuffle,
     skip,
     stop
@@ -24,6 +25,9 @@ export async function messageDispatcher(message: Message) {
         case 'play':
         case 'p':
             return playDispatcher(message, param);
+        case 'search':
+        case 'ps':
+            return search(message, param);
         case 'pause':
             return pause(message);
         case 'stop':
