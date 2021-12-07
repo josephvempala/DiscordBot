@@ -62,7 +62,9 @@ export async function parseYouTubePlayParameter(param: string): Promise<IBasicVi
 
 export async function getYoutubeSearchResultInfo(param: string) {
     try {
-        const finalLinks = await ytsr(param, {limit: 5}).catch(() => null);
+        const filter = await ytsr.getFilters(param).then(x=> x.get('Type')!.get('Video'));
+        if(!filter || !filter.url) return null;
+        const finalLinks = await ytsr(filter.url, {limit: 5}).catch(() => null);
         if (finalLinks) {
             const items = finalLinks.items.map(async (x) => {
                 const item = x as Video;
@@ -91,6 +93,8 @@ export async function getYoutubeSearchResultInfo(param: string) {
 
 export async function getYoutubeSearchResult(param: string): Promise<IBasicVideoInfo[] | null> {
     try {
+        const filter = await ytsr.getFilters(param).then(x=> x.get('Type')!.get('Video'));
+        if(!filter || !filter.url) return null;
         const finalLinks = await ytsr(param, {limit: 1}).catch(() => null);
         if (finalLinks) {
             const link = finalLinks.items[0] as Video;
