@@ -59,8 +59,8 @@ function createNewGuildPlayer(message: Message, queue?: IBasicVideoInfo[]) {
         guild: message.member?.guild!,
         currentlyPlaying: null,
         playerMessages: {} as PlayerMessageDictionary,
-        botLeaveTimeout: setTimeout(async () => {
-            await removeGuildPlayer(guildPlayer);
+        botLeaveTimeout: setTimeout(() => {
+            removeGuildPlayer(guildPlayer);
         }, 600000),
         voiceChannelMembers: new Map<MemberId, GuildMember>(),
         replayRetries: 0,
@@ -75,7 +75,7 @@ function createNewGuildPlayer(message: Message, queue?: IBasicVideoInfo[]) {
     return guildPlayer;
 }
 
-async function removeGuildPlayer(guildPlayer: IGuildPlayer) {
+function removeGuildPlayer(guildPlayer: IGuildPlayer) {
     if (!guildPlayers[guildPlayer.guild.id]) return;
     delete guildPlayers[guildPlayer.guild.id];
     clearTimeout(guildPlayer.botLeaveTimeout!);
@@ -83,7 +83,7 @@ async function removeGuildPlayer(guildPlayer: IGuildPlayer) {
     for (const element in guildPlayer.playerMessages) {
         let message = guildPlayer.playerMessages[element];
         if (message.deletable && !message.deleted) {
-            await message.delete();
+            message.delete();
             delete guildPlayer.playerMessages[element];
         }
     }
@@ -96,12 +96,12 @@ async function removeGuildPlayer(guildPlayer: IGuildPlayer) {
 }
 
 function registerGuildPlayerEventListeners(guildPlayer: IGuildPlayer) {
-    guildPlayer.voiceConnection.addListener(VoiceConnectionStatus.Disconnected, async () => {
-        await removeGuildPlayer(guildPlayer);
+    guildPlayer.voiceConnection.addListener(VoiceConnectionStatus.Disconnected, () => {
+        removeGuildPlayer(guildPlayer);
     });
     guildPlayer.player.addListener("error", async (e: any) => {
         if (guildPlayer.playerMessages['playRequest']) {
-            await guildPlayer.playerMessages['playRequest'].delete();
+            guildPlayer.playerMessages['playRequest'].delete();
             delete guildPlayer.playerMessages['playRequest'];
         }
         if (e.message === "Status code: 403" && guildPlayer.currentlyPlaying && guildPlayer.replayRetries < 5) {
@@ -113,20 +113,20 @@ function registerGuildPlayerEventListeners(guildPlayer: IGuildPlayer) {
             console.log(e);
         }
         guildPlayer.player.stop();
-        await playNext(guildPlayer.voiceConnection, guildPlayer.playerMessages['latestToQueue']);
+        playNext(guildPlayer.voiceConnection, guildPlayer.playerMessages['latestToQueue']);
     });
-    guildPlayer.player.addListener(AudioPlayerStatus.Idle, async () => {
+    guildPlayer.player.addListener(AudioPlayerStatus.Idle, () => {
         if (guildPlayer.playerMessages['playRequest']) {
-            await guildPlayer.playerMessages['playRequest'].delete();
+            guildPlayer.playerMessages['playRequest'].delete();
             delete guildPlayer.playerMessages['playRequest'];
         }
         if (guildPlayers[guildPlayer.guild.id].queue.length <= 0) {
-            guildPlayer.botLeaveTimeout = setTimeout(async () => {
-                await removeGuildPlayer(guildPlayer);
+            guildPlayer.botLeaveTimeout = setTimeout(() => {
+                removeGuildPlayer(guildPlayer);
             }, 600000);
             return;
         }
-        await playNext(guildPlayer.voiceConnection, guildPlayer.playerMessages['latestToQueue']);
+        playNext(guildPlayer.voiceConnection, guildPlayer.playerMessages['latestToQueue']);
     });
     guildPlayer.player.addListener(AudioPlayerStatus.Playing, async (oldState) => {
         guildPlayer.replayRetries = 0;
@@ -161,8 +161,8 @@ async function playNext(voiceConnection: VoiceConnection, message: Message): Pro
         guildPlayer.player.play(resource);
         return;
     }
-    await message.react('⛔');
-    await message.channel.send(`${stream[1]} for ${audioToPlay!.title}`)
+    message.react('⛔');
+    message.channel.send(`${stream[1]} for ${audioToPlay!.title}`)
     return playNext(voiceConnection, message);
 }
 
@@ -175,7 +175,7 @@ async function parsePlayParameter(param: string) {
     return info;
 }
 
-export async function playDispatcher(message: Message, param: string) {
+export function playDispatcher(message: Message, param: string) {
     const guildPlayer = guildPlayers[message.guildId!];
     const searchResults = guildPlayer.playSearch ? [...guildPlayer.playSearch] : null;
     guildPlayer.playSearch = null;
@@ -185,11 +185,11 @@ export async function playDispatcher(message: Message, param: string) {
         return;
     }
     if (isNaN(+param)) {
-        await addToQueue(param, message);
+        addToQueue(param, message);
         return;
     }
     if (+param && searchResults) {
-        await addToQueue(searchResults[+param - 1].url, message);
+        addToQueue(searchResults[+param - 1].url, message);
         return;
     }
     if (+param < guildPlayer.queue.length) {
@@ -201,7 +201,7 @@ export async function playDispatcher(message: Message, param: string) {
             guildPlayer.queue = guildPlayer.queue.filter((x, index) => index != songPointer);
             guildPlayer.queue.unshift(targetSong);
         }
-        await playNext(guildPlayer.voiceConnection, message);
+        playNext(guildPlayer.voiceConnection, message);
         return;
     }
     message.channel.send(`Song number ${param} is not valid`);
@@ -242,7 +242,8 @@ export async function addToQueue(param: string, message: Message) {
         newMessage.delete();
     }
     if (!urls) {
-        message.react('⛔').then(() => message.channel.send("Unable to find " + param));
+        message.react('⛔')
+        message.channel.send("Unable to find " + param);
         return;
     }
     if (!guildPlayer) guildPlayer = createNewGuildPlayer(message, [...urls]);
@@ -251,12 +252,12 @@ export async function addToQueue(param: string, message: Message) {
     if (urls.length > 1) message.channel.send(`Added playlist of ${urls.length} songs to the queue`);
     else {
         message.channel.send(`Added ${urls[0].title} queue \`[${urls[0].isLiveStream ? "LIVE 🔴" : secondsToTime(urls[0].length)}]\``);
-        await message.react("👍");
+        message.react("👍");
     }
-    if (guildPlayer.player.state.status === AudioPlayerStatus.Idle) await playNext(guildPlayer.voiceConnection, message);
+    if (guildPlayer.player.state.status === AudioPlayerStatus.Idle) playNext(guildPlayer.voiceConnection, message);
 }
 
-export async function voiceChannelChange(oldState: VoiceState, newState: VoiceState) {
+export function voiceChannelChange(oldState: VoiceState, newState: VoiceState) {
     const oldChannelId = oldState.channelId;
     const newChannelId = newState.channelId;
     const oldGuildPlayer = guildPlayers[oldState.guild.id];
@@ -268,8 +269,8 @@ export async function voiceChannelChange(oldState: VoiceState, newState: VoiceSt
             if (voiceChannelMemberMap.size === 1) {
                 oldGuildPlayer.textChannel.send("All members left voice channel. Player paused.")
                 oldGuildPlayer.player.pause();
-                oldGuildPlayer.botLeaveTimeout = setTimeout(async () => {
-                    await removeGuildPlayer(oldGuildPlayer);
+                oldGuildPlayer.botLeaveTimeout = setTimeout(() => {
+                    removeGuildPlayer(oldGuildPlayer);
                 }, 60000);
             }
         }
@@ -355,9 +356,9 @@ export function getQueue(param: string, message: Message) {
     message.channel.send(msg);
 }
 
-export async function bbpm(message: Message) {
-    await addToQueue('https://mixlr.com/rjlee27/', message);
-    await message.react("👍");
+export function bbpm(message: Message) {
+    addToQueue('https://mixlr.com/rjlee27/', message);
+    message.react("👍");
 }
 
 export function getNowPlaying(message: Message) {
@@ -379,7 +380,7 @@ export function pause(message: Message) {
     message.react("👍");
 }
 
-export async function leave(message: Message) {
-    await removeGuildPlayer(guildPlayers[message.guildId!]);
-    await message.react("👋");
+export function leave(message: Message) {
+    removeGuildPlayer(guildPlayers[message.guildId!]);
+    message.react("👋");
 }

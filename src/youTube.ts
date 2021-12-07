@@ -62,22 +62,22 @@ export async function parseYouTubePlayParameter(param: string): Promise<IBasicVi
 
 export async function getYoutubeSearchResultInfo(param: string) {
     try {
-        const searchStringResult = await ytsr.getFilters(param)
-            .then(x => x.get('Type')!.get('Video'))
-            .catch(() => null);
-        if (!searchStringResult?.url)
-            return null;
-        const finalLinks = await ytsr(searchStringResult.url, {limit: 5}).catch(() => null);
+        const finalLinks = await ytsr(param, {limit: 5}).catch(() => null);
         if (finalLinks) {
             const items = finalLinks.items.map(async (x) => {
                 const item = x as Video;
-                const basicVideoInfo = await getBasicInfo(item.url).catch(() => null);
+                const duration = item.duration?.split(':')
+                    .map(x=>+x)
+                    .reverse()
+                    .reduce((x,y,z) => 
+                        x+(y*(z*60))
+                    );
                 return {
                     url: item.url,
                     title: item.title,
-                    length: +basicVideoInfo!.videoDetails.lengthSeconds,
+                    length: duration,
                     type: VideoInfoType.YouTube,
-                    isLiveStream: +basicVideoInfo!.videoDetails.lengthSeconds == 0
+                    isLiveStream: item.isLive
                 } as IBasicVideoInfo;
             });
             return await Promise.all(items);
@@ -91,21 +91,21 @@ export async function getYoutubeSearchResultInfo(param: string) {
 
 export async function getYoutubeSearchResult(param: string): Promise<IBasicVideoInfo[] | null> {
     try {
-        const searchStringResult = await ytsr.getFilters(param)
-            .then(x => x.get('Type')!.get('Video'))
-            .catch(() => null);
-        if (!searchStringResult?.url)
-            return null;
-        const finalLinks = await ytsr(searchStringResult.url, {limit: 1}).catch(() => null);
+        const finalLinks = await ytsr(param, {limit: 1}).catch(() => null);
         if (finalLinks) {
-            const link = finalLinks.items[0] as unknown as IBasicVideoInfo;
-            const basicVideoInfo = await getBasicInfo(link.url).catch(() => null);
+            const link = finalLinks.items[0] as Video;
+            const duration = link.duration?.split(':')
+                .map(x=>+x)
+                .reverse()
+                .reduce((x,y,z) =>
+                    x+(y*(z*60))
+                );
             return [{
                 url: link.url,
                 title: link.title,
-                length: +basicVideoInfo!.videoDetails.lengthSeconds,
+                length: duration!,
                 type: VideoInfoType.YouTube,
-                isLiveStream: +basicVideoInfo!.videoDetails.lengthSeconds == 0
+                isLiveStream: link.isLive
             }]
         }
     } catch (e: any) {

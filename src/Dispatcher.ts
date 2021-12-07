@@ -14,7 +14,7 @@ import {
 } from "./MusicPlayer";
 import {broadcastMessage} from "./botutils";
 
-export async function messageDispatcher(message: Message) {
+export function messageDispatcher(message: Message) {
     const input = message.content + ' ';
     const action = input.substring(1, input.indexOf(' ')).toLowerCase();
     const param = input.substring(input.indexOf(' '), input.length).trim();
