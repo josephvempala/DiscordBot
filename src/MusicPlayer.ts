@@ -177,8 +177,11 @@ async function parsePlayParameter(param: string) {
 
 export function playDispatcher(message: Message, param: string) {
     const guildPlayer = guildPlayers[message.guildId!];
-    const searchResults = guildPlayer.playSearch ? [...guildPlayer.playSearch] : null;
-    guildPlayer.playSearch = null;
+    let searchResults;
+    if(guildPlayer){
+        searchResults = guildPlayer.playSearch ? [...guildPlayer.playSearch] : null;
+        guildPlayer.playSearch = null;
+    }
     if (!param && guildPlayer && guildPlayer.player.state.status === AudioPlayerStatus.Paused) {
         guildPlayer.player.unpause();
         message.channel.send(`Resumed ${guildPlayer.currentlyPlaying!.title}`);
