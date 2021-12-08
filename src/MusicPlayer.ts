@@ -178,9 +178,13 @@ async function parsePlayParameter(param: string) {
 export function playDispatcher(message: Message, param: string) {
     const guildPlayer = guildPlayers[message.guildId!];
     let searchResults;
-    if(guildPlayer){
+    if (guildPlayer) {
         searchResults = guildPlayer.playSearch ? [...guildPlayer.playSearch] : null;
         guildPlayer.playSearch = null;
+        if(guildPlayer.botLeaveTimeout){
+            clearTimeout(guildPlayer.botLeaveTimeout!);
+            guildPlayer.botLeaveTimeout = null;
+        }
     }
     if (!param && guildPlayer && guildPlayer.player.state.status === AudioPlayerStatus.Paused) {
         guildPlayer.player.unpause();
@@ -234,10 +238,6 @@ export async function addToQueue(param: string, message: Message) {
         return;
     }
     let guildPlayer = guildPlayers[message.guildId!];
-    if (guildPlayer && guildPlayer.botLeaveTimeout) {
-        clearTimeout(guildPlayer.botLeaveTimeout!);
-        guildPlayer.botLeaveTimeout = null;
-    }
     let urls = await parsePlayParameter(param);
     if (!urls) {
         const newMessage = await message.channel.send(`Searching for ${param}`);
