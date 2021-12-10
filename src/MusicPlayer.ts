@@ -74,8 +74,8 @@ function createNewGuildPlayer(message: Message, queue?: IBasicVideoInfo[]) {
         guildPlayer.botLeaveTimeout = setTimeout(() => {
             removeGuildPlayer(guildPlayer);
         }, 600000);
+        logger.debug(`${guildPlayer.guild.name}(${guildPlayer.guild.id}) added Timeout for bot to leave as no listeners in vc`);
     }
-    logger.debug(`${guildPlayer.guild.name}(${guildPlayer.guild.id}) added Timeout for bot to leave as no listeners in vc`);
     registerGuildPlayerEventListeners(guildPlayer);
     guildPlayer.voiceConnection.subscribe(guildPlayer.player);
     logger.debug(`Added Guild Player for : ${guildPlayer.guild.name}(${guildPlayer.guild.id})`);
