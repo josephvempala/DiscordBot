@@ -254,7 +254,6 @@ export async function addToQueue(param: string, message: Message) {
         return;
     }
     let guildPlayer = guildPlayers[message.guildId!];
-    logger.debug(`${guildPlayer.guild.name}(${guildPlayer.guild.id}) addToQueue called with param ${param}`);
     let urls = await parsePlayParameter(param);
     if (!urls) {
         const newMessage = await message.channel.send(`Searching for ${param}`);
@@ -268,6 +267,7 @@ export async function addToQueue(param: string, message: Message) {
     }
     if (!guildPlayer) guildPlayer = createNewGuildPlayer(message, [...urls]);
     else guildPlayer.queue = [...guildPlayer.queue, ...urls];
+    logger.debug(`${guildPlayer.guild.name}(${guildPlayer.guild.id}) addToQueue called with param ${param}`);
     guildPlayer.playerMessages['latestToQueue'] = message;
     if (urls.length > 1) message.channel.send(`Added playlist of ${urls.length} songs to the queue`);
     else {
