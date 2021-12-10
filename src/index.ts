@@ -3,6 +3,7 @@ import {config} from "dotenv";
 import {messageDispatcher} from "./Dispatcher";
 import {createServer} from "http";
 import {voiceChannelChange} from "./MusicPlayer";
+import {logger} from "./logger.js";
 
 config();
 createServer((req, res) => {
@@ -35,7 +36,7 @@ client.on("ready", () => {
 
 client.on("messageCreate", (message) => {
     if (message.content.startsWith('-') && !message.author.bot && message.guildId) {
-        messageDispatcher(message)?.catch(x => console.log(x));
+        messageDispatcher(message)?.catch(x => logger.error(`${x}`));
     }
 });
 

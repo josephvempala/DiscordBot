@@ -8,7 +8,6 @@ export async function getSoundCloudAudioStream(url: string): Promise<GetAudioStr
         const stream = await scdl.download(url);
         return [stream, null];
     } catch (e) {
-        console.log(e);
         return [null, 'Error occurred while getting SoundCloud audio stream'];
     }
 }
@@ -26,7 +25,6 @@ export async function parseSoundCloudPlayParameter(param: string): Promise<IBasi
             isLiveStream: +info.duration == 0
         }]
     } catch (e) {
-        console.log(e);
         return null;
     }
 }

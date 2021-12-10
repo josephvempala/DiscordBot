@@ -10,10 +10,7 @@ const urlValidationRegex = /(?:https?:\/\/)?(?:www\.)?(mixlr\.com\/[^\/]*?\/\B)/
 export async function getMixlrAudioStream(url: string): Promise<GetAudioStreamResult> {
     let metadata;
     for (let i = 0; i < 5 && !metadata; i++) {
-        metadata = await axios.get(url).catch(x => {
-            console.log(x);
-            return null;
-        });
+        metadata = await axios.get(url).catch(()=>{});
         await timer(100 * i);
     }
     if (!metadata) {
@@ -40,10 +37,7 @@ export async function parseMixlrPlayParameter(url: string): Promise<IBasicVideoI
     }
     let result;
     for (let i = 0; i < 5 && !result; i++) {
-        result = await axios.get(`https://${urlMatch[1]}`).catch(x => {
-            console.log(x);
-            return null;
-        });
+        result = await axios.get(`https://${urlMatch[1]}`).catch(()=>{});
         await timer(100 * i);
     }
     if (!result) {
