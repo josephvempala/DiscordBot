@@ -138,6 +138,7 @@ function registerGuildPlayerEventListeners(guildPlayer: IGuildPlayer) {
             logger.debug(`${guildPlayer.guild.name}(${guildPlayer.guild.id}) added Timeout for bot to leave as queue empty`);
             return;
         }
+        logger.debug(`${guildPlayer.guild.name}(${guildPlayer.guild.id}) finished playing ${guildPlayer.currentlyPlaying!.title}`);
         playNext(guildPlayer.voiceConnection, guildPlayer.playerMessages['latestToQueue']);
     });
     guildPlayer.player.addListener(AudioPlayerStatus.Playing, async (oldState) => {
@@ -204,17 +205,21 @@ export function playDispatcher(message: Message, param: string) {
     if (!param && guildPlayer && guildPlayer.player.state.status === AudioPlayerStatus.Paused) {
         guildPlayer.player.unpause();
         message.channel.send(`Resumed ${guildPlayer.currentlyPlaying!.title}`);
+        logger.debug(`${guildPlayer.guild.name}(${guildPlayer.guild.id}) unpaused ${guildPlayer.currentlyPlaying!.title}`);
         return;
     }
     if (isNaN(+param)) {
         addToQueue(param, message);
+        logger.debug(`${guildPlayer.guild.name}(${guildPlayer.guild.id}) added ${param} for string search`);
         return;
     }
-    if (+param && searchResults) {
+    if (+param && searchResults && +param < searchResults.length) {
         addToQueue(searchResults[+param - 1].url, message);
+        logger.debug(`${guildPlayer.guild.name}(${guildPlayer.guild.id}) selected song number ${param} from search results`);
         return;
     }
-    if (+param < guildPlayer.queue.length) {
+    if (guildPlayer && +param < guildPlayer.queue.length + 2) {
+        logger.debug(`${guildPlayer.guild.name}(${guildPlayer.guild.id}) selected song number ${param} from queue`);
         const songPointer = +param - 2;
         if (songPointer === -1 && guildPlayer.currentlyPlaying) {
             guildPlayer.queue.unshift(guildPlayer.currentlyPlaying);
