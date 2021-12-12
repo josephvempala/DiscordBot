@@ -210,12 +210,12 @@ export function playDispatcher(message: Message, param: string) {
     }
     if (isNaN(+param)) {
         addToQueue(param, message);
-        logger.debug(`${guildPlayer.guild.name}(${guildPlayer.guild.id}) added ${param} for string search`);
+        logger.debug(`${message.guild!.name}(${message.guild!.id}) added ${param} for string search`);
         return;
     }
     if (+param && searchResults && +param < searchResults.length) {
         addToQueue(searchResults[+param - 1].url, message);
-        logger.debug(`${guildPlayer.guild.name}(${guildPlayer.guild.id}) selected song number ${param} from search results`);
+        logger.debug(`${message.guild!.name}(${message.guild!.id}) selected song number ${param} from search results`);
         return;
     }
     if (guildPlayer && +param < guildPlayer.queue.length + 2) {
