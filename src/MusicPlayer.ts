@@ -86,8 +86,7 @@ function removeGuildPlayer(guildPlayer: IGuildPlayer) {
     logger.debug(`Removing Guild Player for : ${guildPlayer.guild.name}(${guildPlayer.guild.id})`);
     if (!guildPlayers[guildPlayer.guild.id]) return;
     delete guildPlayers[guildPlayer.guild.id];
-    clearTimeout(guildPlayer.botLeaveTimeout!);
-    guildPlayer.botLeaveTimeout = null;
+    clearBotLeaveTimeout(guildPlayer);
     for (const element in guildPlayer.playerMessages) {
         let message = guildPlayer.playerMessages[element];
         if (message.deletable && !message.deleted) {
@@ -102,6 +101,12 @@ function removeGuildPlayer(guildPlayer: IGuildPlayer) {
     guildPlayer.voiceConnection.disconnect();
     guildPlayer.voiceConnection.destroy();
     logger.debug(`Removed Guild Player : ${guildPlayer.guild.name}(${guildPlayer.guild.id})`);
+}
+
+function clearBotLeaveTimeout(guildPlayer : IGuildPlayer){
+    if(!guildPlayer.botLeaveTimeout) return;
+    clearTimeout(guildPlayer.botLeaveTimeout!);
+    guildPlayer.botLeaveTimeout = null;
 }
 
 function registerGuildPlayerEventListeners(guildPlayer: IGuildPlayer) {
@@ -149,6 +154,9 @@ function registerGuildPlayerEventListeners(guildPlayer: IGuildPlayer) {
             .playerMessages['latestToQueue'].channel
             .send(newPlayingMessage);
     });
+    guildPlayer.player.addListener("debug", (message)=>{
+        logger.debug(`${guildPlayer.guild.name}(${guildPlayer.guild.id}) ${message}`);
+    })
 }
 
 async function getAudioStream(info: IBasicVideoInfo) {
@@ -167,7 +175,7 @@ async function playNext(voiceConnection: VoiceConnection, message: Message): Pro
     const guildPlayer = guildPlayers[message.guildId!];
     if (guildPlayer.queue.length <= 0) return;
     const audioToPlay = guildPlayer.queue.shift();
-    logger.debug(`${guildPlayer.guild.name}(${guildPlayer.guild.id}) getting ready to play ${audioToPlay!.title}`);
+    logger.debug(`${guildPlayer.guild.name}(${guildPlayer.guild.id}) getting ready to play ${audioToPlay?.title}`);
     guildPlayer.currentlyPlaying = audioToPlay!;
     const stream = await getAudioStream(audioToPlay!);
     if (stream[0]) {
@@ -181,13 +189,26 @@ async function playNext(voiceConnection: VoiceConnection, message: Message): Pro
     return playNext(voiceConnection, message);
 }
 
-async function parsePlayParameter(param: string) {
-    let info: IBasicVideoInfo[] | null;
-    if (!isValidURL(param)) return null;
-    info = await parseSoundCloudPlayParameter(param);
-    if (!info) info = await parseMixlrPlayParameter(param);
-    if (!info) info = await parseYouTubePlayParameter(param);
-    return info;
+async function searchByQueryString(param : string, message : Message){
+    const newMessage = await message.channel.send(`Searching for ${param}`);
+    const urls = await getYoutubeSearchResult(param);
+    newMessage.delete();
+    return urls;
+}
+
+async function parsePlayParameter(param: string, message : Message) {
+    const urlRegexResult = isValidURL(param);
+    if(!urlRegexResult) return await searchByQueryString(param, message);
+    switch (urlRegexResult[4].toLowerCase()){
+        case 'youtube':
+            return await parseYouTubePlayParameter(param);
+        case 'soundcloud':
+            return await parseSoundCloudPlayParameter(param);
+        case 'mixlr':
+            return await parseMixlrPlayParameter(param);
+        default :
+            message.channel.send(`${urlRegexResult[2]} is not supported currently`);
+    }
 }
 
 export function playDispatcher(message: Message, param: string) {
@@ -196,11 +217,8 @@ export function playDispatcher(message: Message, param: string) {
     if (guildPlayer) {
         searchResults = guildPlayer.playSearch ? [...guildPlayer.playSearch] : null;
         guildPlayer.playSearch = null;
-        if(guildPlayer.botLeaveTimeout){
-            clearTimeout(guildPlayer.botLeaveTimeout!);
-            guildPlayer.botLeaveTimeout = null;
-            logger.debug(`${guildPlayer.guild.name}(${guildPlayer.guild.id}) Play Dispatcher cleared timeout`);
-        }
+        clearBotLeaveTimeout(guildPlayer);
+        logger.debug(`${guildPlayer.guild.name}(${guildPlayer.guild.id}) Play Dispatcher cleared timeout`);
     }
     if (!param && guildPlayer && guildPlayer.player.state.status === AudioPlayerStatus.Paused) {
         guildPlayer.player.unpause();
@@ -213,12 +231,12 @@ export function playDispatcher(message: Message, param: string) {
         logger.debug(`${message.guild!.name}(${message.guild!.id}) added ${param} for string search`);
         return;
     }
-    if (+param && searchResults && +param < searchResults.length) {
+    if (+param && searchResults && +param <= searchResults.length) {
         addToQueue(searchResults[+param - 1].url, message);
         logger.debug(`${message.guild!.name}(${message.guild!.id}) selected song number ${param} from search results`);
         return;
     }
-    if (guildPlayer && +param < guildPlayer.queue.length + 2) {
+    if (guildPlayer && param != "" && +param <= guildPlayer.queue.length + 1) {
         logger.debug(`${guildPlayer.guild.name}(${guildPlayer.guild.id}) selected song number ${param} from queue`);
         const songPointer = +param - 2;
         if (songPointer === -1 && guildPlayer.currentlyPlaying) {
@@ -259,12 +277,7 @@ export async function addToQueue(param: string, message: Message) {
         return;
     }
     let guildPlayer = guildPlayers[message.guildId!];
-    let urls = await parsePlayParameter(param);
-    if (!urls) {
-        const newMessage = await message.channel.send(`Searching for ${param}`);
-        urls = await getYoutubeSearchResult(param);
-        newMessage.delete();
-    }
+    const urls = await parsePlayParameter(param, message);
     if (!urls) {
         message.react('⛔')
         message.channel.send("Unable to find " + param);
@@ -304,8 +317,7 @@ export function voiceChannelChange(oldState: VoiceState, newState: VoiceState) {
     if (newChannelId && newGuildPlayer) {
         newGuildPlayer.voiceChannelMembers.set(newState.member!.id, newState.member!);
         if (newGuildPlayer.voiceChannelMembers.size === 2 && oldGuildPlayer.botLeaveTimeout && newGuildPlayer.player.state.status === AudioPlayerStatus.Paused) {
-            clearTimeout(oldGuildPlayer.botLeaveTimeout!);
-            oldGuildPlayer.botLeaveTimeout = null;
+            clearBotLeaveTimeout(oldGuildPlayer);
             logger.debug(`${oldGuildPlayer.guild.name}(${oldGuildPlayer.guild.id}) removed timeout as member rejoined vc`);
             newGuildPlayer.player.unpause();
         }

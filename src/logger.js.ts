@@ -18,11 +18,11 @@ class Logger {
     
     public debug(msg : string){
         if(this.environment !== "development") return;
-        console.log(`[${Date.now()}][DEBUG] : ${msg}`);
+        console.log(`[${Date.now().toString()}][DEBUG] : ${msg}`);
     }
     
     public error(msg : string){
-        console.error(`[${Date.now()}][ERROR] : ${msg}`);
+        console.error(`[${Date.now().toString()}][ERROR] : ${msg}`);
     }
     
 }
