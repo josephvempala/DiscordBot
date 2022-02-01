@@ -22,6 +22,7 @@ import {getSoundCloudAudioStream, parseSoundCloudPlayParameter} from "./soundClo
 import {GetAudioStreamResult} from "./GetAudioStreamResult";
 import {getMixlrAudioStream, parseMixlrPlayParameter} from "./mixlr";
 import {logger} from "./logger.js";
+import {client} from "./index";
 
 type PlayerMessageDictionary = {
     [message: string]: Message;
@@ -98,8 +99,8 @@ function removeGuildPlayer(guildPlayer: IGuildPlayer) {
     guildPlayer.player.removeAllListeners(AudioPlayerStatus.Playing);
     guildPlayer.player.removeAllListeners("error");
     guildPlayer.voiceConnection.removeAllListeners(VoiceConnectionStatus.Disconnected);
-    guildPlayer.voiceConnection.disconnect();
-    guildPlayer.voiceConnection.destroy();
+    if(guildPlayer.voiceChannelMembers.has(client.user!.id))
+        guildPlayer.voiceConnection.destroy();
     logger.debug(`Removed Guild Player : ${guildPlayer.guild.name}(${guildPlayer.guild.id})`);
 }
 
