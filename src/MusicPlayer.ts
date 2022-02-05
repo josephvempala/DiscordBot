@@ -1,6 +1,5 @@
-import {Guild, GuildMember, Message, TextChannel, VoiceState} from "discord.js";
+import {GuildMember, Message, TextChannel, VoiceState} from "discord.js";
 import {
-    AudioPlayer,
     AudioPlayerStatus,
     createAudioPlayer,
     createAudioResource,
@@ -17,38 +16,21 @@ import {
     parseYouTubePlayParameter
 } from "./youTube";
 import {isValidURL, secondsToTime, shuffleArray, timer} from "./util"
-import {IBasicVideoInfo, VideoInfoType} from "./IBasicVideoInfo";
+import {IBasicVideoInfo, VideoInfoType} from "./Interfaces/IBasicVideoInfo";
 import {getSoundCloudAudioStream, parseSoundCloudPlayParameter} from "./soundCloud";
-import {GetAudioStreamResult} from "./GetAudioStreamResult";
+import {GetAudioStreamResult} from "./Interfaces/GetAudioStreamResult";
 import {getMixlrAudioStream, parseMixlrPlayParameter} from "./mixlr";
 import {logger} from "./logger.js";
 import {client} from "./index";
-
-type PlayerMessageDictionary = {
-    [message: string]: Message;
-}
+import {IGuildMusicPlayer} from "./Interfaces/IGuildMusicPlayer";
 
 type GuildId = string;
-type MemberId = string
+type MemberId = string;
 
-interface IGuildPlayer {
-    queue: IBasicVideoInfo[];
-    player: AudioPlayer;
-    voiceConnection: VoiceConnection;
-    textChannel: TextChannel;
-    guild: Guild;
-    currentlyPlaying: IBasicVideoInfo | null;
-    playerMessages: PlayerMessageDictionary;
-    botLeaveTimeout: NodeJS.Timeout | null;
-    voiceChannelMembers: Map<MemberId, GuildMember>;
-    replayRetries: number;
-    playSearch: IBasicVideoInfo[] | null;
-}
-
-const guildPlayers: { [guildId: GuildId]: IGuildPlayer } = {};
+const guildPlayers: { [guildId: GuildId]: IGuildMusicPlayer } = {};
 
 function createNewGuildPlayer(message: Message, queue?: IBasicVideoInfo[]) {
-    const guildPlayer : IGuildPlayer = {
+    const guildPlayer: IGuildMusicPlayer = {
         queue: queue ? queue : [],
         player: createAudioPlayer(),
         textChannel: message.channel as TextChannel,
@@ -60,104 +42,99 @@ function createNewGuildPlayer(message: Message, queue?: IBasicVideoInfo[]) {
         }),
         guild: message.member?.guild!,
         currentlyPlaying: null,
-        playerMessages: {} as PlayerMessageDictionary,
+        playerMessages: new Map<string, Message>(),
         botLeaveTimeout: null,
         voiceChannelMembers: new Map<MemberId, GuildMember>(),
         replayRetries: 0,
         playSearch: null
     }
-    logger.debug(`Adding Guild Player for : ${guildPlayer.guild.name}(${guildPlayer.guild.id})`);
     guildPlayers[message.guildId!] = guildPlayer;
     message.member!.voice.channel!.members!.forEach(x => {
         guildPlayer.voiceChannelMembers.set(x.id, x);
     });
-    if(guildPlayer.voiceChannelMembers.size < 1){
+    if (guildPlayer.voiceChannelMembers.size < 1) {
         guildPlayer.botLeaveTimeout = setTimeout(() => {
             removeGuildPlayer(guildPlayer);
         }, 600000);
-        logger.debug(`${guildPlayer.guild.name}(${guildPlayer.guild.id}) added Timeout for bot to leave as no listeners in vc`);
+        logger.debug(`Added Timeout for bot to leave as no listeners in vc`, guildPlayer.guild.id);
     }
     registerGuildPlayerEventListeners(guildPlayer);
     guildPlayer.voiceConnection.subscribe(guildPlayer.player);
-    logger.debug(`Added Guild Player for : ${guildPlayer.guild.name}(${guildPlayer.guild.id})`);
+    logger.debug(`Created music player`, guildPlayer.guild.id);
     return guildPlayer;
 }
 
-function removeGuildPlayer(guildPlayer: IGuildPlayer) {
-    logger.debug(`Removing Guild Player for : ${guildPlayer.guild.name}(${guildPlayer.guild.id})`);
+function removeGuildPlayer(guildPlayer: IGuildMusicPlayer) {
+    logger.debug(`Removing music player`, guildPlayer.guild.id);
     if (!guildPlayers[guildPlayer.guild.id]) return;
     delete guildPlayers[guildPlayer.guild.id];
     clearBotLeaveTimeout(guildPlayer);
     for (const element in guildPlayer.playerMessages) {
-        let message = guildPlayer.playerMessages[element];
+        let message = guildPlayer.playerMessages.get(element)!;
         if (message.deletable && !message.deleted) {
             message.delete();
-            delete guildPlayer.playerMessages[element];
+            guildPlayer.playerMessages.delete(element);
         }
     }
     guildPlayer.player.removeAllListeners(AudioPlayerStatus.Idle);
     guildPlayer.player.removeAllListeners(AudioPlayerStatus.Playing);
     guildPlayer.player.removeAllListeners("error");
     guildPlayer.voiceConnection.removeAllListeners(VoiceConnectionStatus.Disconnected);
-    if(guildPlayer.voiceChannelMembers.has(client.user!.id))
+    if (guildPlayer.voiceChannelMembers.has(client.user!.id))
         guildPlayer.voiceConnection.destroy();
-    logger.debug(`Removed Guild Player : ${guildPlayer.guild.name}(${guildPlayer.guild.id})`);
+    logger.debug(`Removed music player`, guildPlayer.guild.id);
 }
 
-function clearBotLeaveTimeout(guildPlayer : IGuildPlayer){
-    if(!guildPlayer.botLeaveTimeout) return;
+function clearBotLeaveTimeout(guildPlayer: IGuildMusicPlayer) {
+    if (!guildPlayer.botLeaveTimeout) return;
     clearTimeout(guildPlayer.botLeaveTimeout!);
     guildPlayer.botLeaveTimeout = null;
 }
 
-function registerGuildPlayerEventListeners(guildPlayer: IGuildPlayer) {
+function registerGuildPlayerEventListeners(guildPlayer: IGuildMusicPlayer) {
     guildPlayer.voiceConnection.addListener(VoiceConnectionStatus.Disconnected, () => {
-        logger.debug(`Disconnected voice connection of Guild : ${guildPlayer.guild.name}(${guildPlayer.guild.id})`);
+        logger.debug(`Voice disconnected`, guildPlayer.guild.id);
         removeGuildPlayer(guildPlayer);
     });
     guildPlayer.player.addListener("error", async (e: any) => {
-        if (guildPlayer.playerMessages['playRequest']) {
-            guildPlayer.playerMessages['playRequest'].delete();
-            delete guildPlayer.playerMessages['playRequest'];
+        if (guildPlayer.playerMessages.has('playRequest')) {
+            guildPlayer.playerMessages.get('playRequest')!.delete();
+            guildPlayer.playerMessages.delete('playRequest');
         }
         if (e.message === "Status code: 403" && guildPlayer.currentlyPlaying && guildPlayer.replayRetries < 5) {
             await timer(100 * guildPlayer.replayRetries);
             guildPlayer.queue?.unshift(guildPlayer.currentlyPlaying!);
             guildPlayer.replayRetries++;
-            logger.debug(`Error occurred in Guild Player ${guildPlayer.guild.name}(${guildPlayer.guild.id}) while playing retrying.. ${guildPlayer.replayRetries} retries`);
-        }
-        else{
-            logger.error(`Error occurred in Guild Player ${guildPlayer.guild.name}(${guildPlayer.guild.id}) while playing : ${e.message}`);
+            logger.debug(`Error occurred in music player while attempting to play '${guildPlayer.currentlyPlaying.title}' playing retrying.. ${guildPlayer.replayRetries} retries`, guildPlayer.guild.id);
+        } else {
+            logger.error(`Error occurred in music player while attempting to play '${guildPlayer.currentlyPlaying?.title ?? ''}' : ${e.message}`, guildPlayer.guild.id);
         }
         guildPlayer.player.stop();
-        playNext(guildPlayer.voiceConnection, guildPlayer.playerMessages['latestToQueue']);
+        playNext(guildPlayer.voiceConnection, guildPlayer.playerMessages.get('latestToQueue')!);
     });
     guildPlayer.player.addListener(AudioPlayerStatus.Idle, () => {
-        if (guildPlayer.playerMessages['playRequest']) {
-            guildPlayer.playerMessages['playRequest'].delete();
-            delete guildPlayer.playerMessages['playRequest'];
+        if (guildPlayer.playerMessages.has('playRequest')) {
+            guildPlayer.playerMessages.get('playRequest')!.delete();
+            guildPlayer.playerMessages.delete('playRequest');
         }
         if (guildPlayers[guildPlayer.guild.id].queue.length <= 0) {
             guildPlayer.botLeaveTimeout = setTimeout(() => {
                 removeGuildPlayer(guildPlayer);
             }, 600000);
-            logger.debug(`${guildPlayer.guild.name}(${guildPlayer.guild.id}) added Timeout for bot to leave as queue empty`);
+            logger.debug(`Added Timeout for bot to leave as queue empty`, guildPlayer.guild.id);
             return;
         }
-        logger.debug(`${guildPlayer.guild.name}(${guildPlayer.guild.id}) finished playing ${guildPlayer.currentlyPlaying!.title}`);
-        playNext(guildPlayer.voiceConnection, guildPlayer.playerMessages['latestToQueue']);
+        logger.debug(`$finished playing ${guildPlayer.currentlyPlaying!.title}`, guildPlayer.guild.id);
+        playNext(guildPlayer.voiceConnection, guildPlayer.playerMessages.get('latestToQueue')!);
     });
     guildPlayer.player.addListener(AudioPlayerStatus.Playing, async (oldState) => {
         guildPlayer.replayRetries = 0;
         if (oldState.status === AudioPlayerStatus.AutoPaused || oldState.status === AudioPlayerStatus.Paused) return;
         const newPlayingMessage = `Now Playing ${guildPlayer.currentlyPlaying!.title}, \`[${guildPlayer.currentlyPlaying!.isLiveStream ? "LIVE 🔴" : secondsToTime(guildPlayer.currentlyPlaying!.length)}]\``;
-        guildPlayer.playerMessages['playRequest'] = await guildPlayer
-            .playerMessages['latestToQueue'].channel
-            .send(newPlayingMessage);
+        guildPlayer.playerMessages.set('playRequest', await guildPlayer
+            .playerMessages.get('latestToQueue')!.channel
+            .send(newPlayingMessage));
     });
-    guildPlayer.player.addListener("debug", (message)=>{
-        logger.debug(`${guildPlayer.guild.name}(${guildPlayer.guild.id}) ${message}`);
-    })
 }
 
 async function getAudioStream(info: IBasicVideoInfo) {
@@ -176,13 +153,13 @@ async function playNext(voiceConnection: VoiceConnection, message: Message): Pro
     const guildPlayer = guildPlayers[message.guildId!];
     if (guildPlayer.queue.length <= 0) return;
     const audioToPlay = guildPlayer.queue.shift();
-    logger.debug(`${guildPlayer.guild.name}(${guildPlayer.guild.id}) getting ready to play ${audioToPlay?.title}`);
+    logger.debug(`Preparing to play ${audioToPlay?.title}`, guildPlayer.guild.id);
     guildPlayer.currentlyPlaying = audioToPlay!;
     const stream = await getAudioStream(audioToPlay!);
     if (stream[0]) {
         const resource = createAudioResource(stream[0], {inputType: StreamType.Arbitrary});
         guildPlayer.player.play(resource);
-        logger.debug(`${guildPlayer.guild.name}(${guildPlayer.guild.id}) playing... ${audioToPlay!.title}`);
+        logger.debug(`Now playing... ${audioToPlay!.title}`, guildPlayer.guild.id);
         return;
     }
     message.react('⛔');
@@ -190,17 +167,17 @@ async function playNext(voiceConnection: VoiceConnection, message: Message): Pro
     return playNext(voiceConnection, message);
 }
 
-async function searchByQueryString(param : string, message : Message){
-    const newMessage = await message.channel.send(`Searching for ${param}`);
+async function searchByQueryString(param: string, message: Message) {
+    const newMessage = await message.channel.send(`Searching for '${param}'`);
     const urls = await getYoutubeSearchResult(param);
     newMessage.delete();
     return urls;
 }
 
-async function parsePlayParameter(param: string, message : Message) {
+async function parsePlayParameter(param: string, message: Message) {
     const urlRegexResult = isValidURL(param);
-    if(!urlRegexResult) return await searchByQueryString(param, message);
-    switch (urlRegexResult[4].toLowerCase()){
+    if (!urlRegexResult) return await searchByQueryString(param, message);
+    switch (urlRegexResult[4].toLowerCase()) {
         case 'youtube':
             return await parseYouTubePlayParameter(param);
         case 'soundcloud':
@@ -212,33 +189,33 @@ async function parsePlayParameter(param: string, message : Message) {
     }
 }
 
-export function playDispatcher(message: Message, param: string) {
+export function play(message: Message, param: string) {
     const guildPlayer = guildPlayers[message.guildId!];
     let searchResults;
     if (guildPlayer) {
         searchResults = guildPlayer.playSearch ? [...guildPlayer.playSearch] : null;
         guildPlayer.playSearch = null;
         clearBotLeaveTimeout(guildPlayer);
-        logger.debug(`${guildPlayer.guild.name}(${guildPlayer.guild.id}) Play Dispatcher cleared timeout`);
+        logger.debug(`Play Dispatcher cleared leave timeout`, guildPlayer.guild.id);
     }
     if (!param && guildPlayer && guildPlayer.player.state.status === AudioPlayerStatus.Paused) {
         guildPlayer.player.unpause();
         message.channel.send(`Resumed ${guildPlayer.currentlyPlaying!.title}`);
-        logger.debug(`${guildPlayer.guild.name}(${guildPlayer.guild.id}) unpaused ${guildPlayer.currentlyPlaying!.title}`);
+        logger.debug(`Un-paused music player ${guildPlayer.currentlyPlaying!.title}`, guildPlayer.guild.id);
         return;
     }
     if (isNaN(+param)) {
         addToQueue(param, message);
-        logger.debug(`${message.guild!.name}(${message.guild!.id}) added ${param} for string search`);
+        logger.debug(`Added '${param}' for youtube string search`, message.guildId!);
         return;
     }
     if (+param && searchResults && +param <= searchResults.length) {
         addToQueue(searchResults[+param - 1].url, message);
-        logger.debug(`${message.guild!.name}(${message.guild!.id}) selected song number ${param} from search results`);
+        logger.debug(`Selected song number '${param}' from search results`, guildPlayer.guild.id);
         return;
     }
     if (guildPlayer && param != "" && +param <= guildPlayer.queue.length + 1) {
-        logger.debug(`${guildPlayer.guild.name}(${guildPlayer.guild.id}) selected song number ${param} from queue`);
+        logger.debug(`Selected song number '${param}' from queue`, guildPlayer.guild.id);
         const songPointer = +param - 2;
         if (songPointer === -1 && guildPlayer.currentlyPlaying) {
             guildPlayer.queue.unshift(guildPlayer.currentlyPlaying);
@@ -250,7 +227,7 @@ export function playDispatcher(message: Message, param: string) {
         playNext(guildPlayer.voiceConnection, message);
         return;
     }
-    message.channel.send(`Song number ${param} is not valid`);
+    message.channel.send(`Song number '${param}' is not valid`);
 }
 
 export async function search(message: Message, param: string) {
@@ -260,12 +237,12 @@ export async function search(message: Message, param: string) {
     }
     if (!guildPlayers[message.guildId!]) createNewGuildPlayer(message);
     const guildPlayer = guildPlayers[message.guildId!];
-    logger.debug(`${guildPlayer.guild.name}(${guildPlayer.guild.id}) searching using ps`);
-    const newMessage = await message.channel.send(`Searching for ${param}`);
+    logger.debug(`Searching using ps command with '${param}' as search query`, guildPlayer.guild.id);
+    const newMessage = await message.channel.send(`Searching for '${param}'`);
     guildPlayer.playSearch = await getYoutubeSearchResultInfo(param);
     newMessage.delete();
     if (!guildPlayer.playSearch) {
-        message.channel.send(`unable to get search results for ${param}`);
+        message.channel.send(`Unable to get search results for '${param}'`);
     }
     let msg = '**Please select a track with the -p 1-5 command**\n';
     guildPlayer.playSearch!.forEach((x, i) => msg += `**#${i + 1}** ${x.title} \`[${x.isLiveStream ? "LIVE 🔴" : secondsToTime(x.length)}]\`\n`);
@@ -286,11 +263,11 @@ export async function addToQueue(param: string, message: Message) {
     }
     if (!guildPlayer) guildPlayer = createNewGuildPlayer(message, [...urls]);
     else guildPlayer.queue = [...guildPlayer.queue, ...urls];
-    logger.debug(`${guildPlayer.guild.name}(${guildPlayer.guild.id}) addToQueue called with param ${param}`);
-    guildPlayer.playerMessages['latestToQueue'] = message;
+    logger.debug(`AddToQueue called with '${param}' as parameter`, guildPlayer.guild.id);
+    guildPlayer.playerMessages.set('latestToQueue', message);
     if (urls.length > 1) message.channel.send(`Added playlist of ${urls.length} songs to the queue`);
     else {
-        message.channel.send(`Added ${urls[0].title} queue \`[${urls[0].isLiveStream ? "LIVE 🔴" : secondsToTime(urls[0].length)}]\``);
+        guildPlayer.playerMessages.set('addedTrack', await message.channel.send(`Added ${urls[0].title} queue \`[${urls[0].isLiveStream ? "LIVE 🔴" : secondsToTime(urls[0].length)}]\``));
         message.react("👍");
     }
     if (guildPlayer.player.state.status === AudioPlayerStatus.Idle) playNext(guildPlayer.voiceConnection, message);
@@ -311,7 +288,7 @@ export function voiceChannelChange(oldState: VoiceState, newState: VoiceState) {
                 oldGuildPlayer.botLeaveTimeout = setTimeout(() => {
                     removeGuildPlayer(oldGuildPlayer);
                 }, 60000);
-                logger.debug(`${oldGuildPlayer.guild.name}(${oldGuildPlayer.guild.id}) added Timeout for bot to leave as no members left in vc`);
+                logger.debug(`Added Timeout for bot to leave as no members left in voice channel`, oldGuildPlayer.guild.id);
             }
         }
     }
@@ -319,7 +296,7 @@ export function voiceChannelChange(oldState: VoiceState, newState: VoiceState) {
         newGuildPlayer.voiceChannelMembers.set(newState.member!.id, newState.member!);
         if (newGuildPlayer.voiceChannelMembers.size === 2 && oldGuildPlayer.botLeaveTimeout && newGuildPlayer.player.state.status === AudioPlayerStatus.Paused) {
             clearBotLeaveTimeout(oldGuildPlayer);
-            logger.debug(`${oldGuildPlayer.guild.name}(${oldGuildPlayer.guild.id}) removed timeout as member rejoined vc`);
+            logger.debug(`removed timeout as member rejoined vc`, newGuildPlayer.guild.id);
             newGuildPlayer.player.unpause();
         }
     }

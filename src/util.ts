@@ -5,11 +5,15 @@ export function shuffleArray(arr: any[]) {
     }
 }
 
-export const timer = (ms: number) => new Promise(res => {
-    const timeout = setTimeout(res, ms);
-});
+export const timer = (ms: number) => new Promise(res => setTimeout(res, ms));
 
-export const secondsToTime = (seconds: number) => {try { return new Date(1000 * seconds).toISOString().substr(11, 8)} catch { return "0"}};
+export const secondsToTime = (seconds: number) => {
+    try {
+        return new Date(1000 * seconds).toISOString().substr(11, 8)
+    } catch {
+        return "0"
+    }
+};
 
 export const isValidURL = (str: string) => {
     const pattern = new RegExp('^(https?:\\/\\/)?' +

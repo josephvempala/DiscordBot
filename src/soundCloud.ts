@@ -1,5 +1,5 @@
-import {GetAudioStreamResult} from "./GetAudioStreamResult";
-import {IBasicVideoInfo, VideoInfoType} from "./IBasicVideoInfo";
+import {GetAudioStreamResult} from "./Interfaces/GetAudioStreamResult";
+import {IBasicVideoInfo, VideoInfoType} from "./Interfaces/IBasicVideoInfo";
 
 const scdl = require('soundcloud-downloader').create({});
 

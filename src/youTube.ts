@@ -2,8 +2,8 @@ import {Readable} from "node:stream";
 import {chooseFormat, downloadFromInfo, getBasicInfo, getInfo} from 'ytdl-core-discord';
 import ytpl from "ytpl";
 import ytsr, {Video} from "ytsr";
-import {IBasicVideoInfo, VideoInfoType} from "./IBasicVideoInfo";
-import {GetAudioStreamResult} from "./GetAudioStreamResult";
+import {IBasicVideoInfo, VideoInfoType} from "./Interfaces/IBasicVideoInfo";
+import {GetAudioStreamResult} from "./Interfaces/GetAudioStreamResult";
 
 export async function getYoutubeAudioStream(url: string): Promise<GetAudioStreamResult> {
     try {
@@ -62,17 +62,17 @@ export async function parseYouTubePlayParameter(param: string): Promise<IBasicVi
 
 export async function getYoutubeSearchResultInfo(param: string) {
     try {
-        const filter = await ytsr.getFilters(param).then(x=> x.get('Type')!.get('Video'));
-        if(!filter || !filter.url) return null;
+        const filter = await ytsr.getFilters(param).then(x => x.get('Type')!.get('Video'));
+        if (!filter || !filter.url) return null;
         const finalLinks = await ytsr(filter.url, {limit: 5}).catch(() => null);
         if (finalLinks) {
             const items = finalLinks.items.map(async (x) => {
                 const item = x as Video;
                 const duration = item.duration?.split(':')
-                    .map(x=>+x)
+                    .map(x => +x)
                     .reverse()
-                    .reduce((x,y,z) => 
-                        x+(y*(z*60))
+                    .reduce((x, y, z) =>
+                        x + (y * (z * 60))
                     );
                 return {
                     url: item.url,
@@ -93,16 +93,16 @@ export async function getYoutubeSearchResultInfo(param: string) {
 
 export async function getYoutubeSearchResult(param: string): Promise<IBasicVideoInfo[] | null> {
     try {
-        const filter = await ytsr.getFilters(param).then(x=> x.get('Type')!.get('Video'));
-        if(!filter || !filter.url) return null;
+        const filter = await ytsr.getFilters(param).then(x => x.get('Type')!.get('Video'));
+        if (!filter || !filter.url) return null;
         const finalLinks = await ytsr(param, {limit: 1}).catch(() => null);
         if (finalLinks) {
             const link = finalLinks.items[0] as Video;
             const duration = link.duration?.split(':')
-                .map(x=>+x)
+                .map(x => +x)
                 .reverse()
-                .reduce((x,y,z) =>
-                    x+(y*(z*60))
+                .reduce((x, y, z) =>
+                    x + (y * (z * 60))
                 );
             return [{
                 url: link.url,

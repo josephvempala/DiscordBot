@@ -1,17 +1,5 @@
 import {Message} from "discord.js";
-import {
-    bbpm,
-    clear,
-    getNowPlaying,
-    getQueue,
-    leave,
-    pause,
-    playDispatcher,
-    search,
-    shuffle,
-    skip,
-    stop
-} from "./MusicPlayer";
+import {bbpm, clear, getNowPlaying, getQueue, leave, pause, play, search, shuffle, skip, stop} from "./MusicPlayer";
 import {broadcastMessage} from "./botutils";
 
 export function messageDispatcher(message: Message) {
@@ -24,7 +12,7 @@ export function messageDispatcher(message: Message) {
             break;
         case 'play':
         case 'p':
-            return playDispatcher(message, param);
+            return play(message, param);
         case 'search':
         case 'ps':
             return search(message, param);

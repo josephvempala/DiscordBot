@@ -3,6 +3,7 @@ import {config} from "dotenv";
 import {messageDispatcher} from "./Dispatcher";
 import {createServer} from "http";
 import {voiceChannelChange} from "./MusicPlayer";
+import mongoose from "mongoose";
 import {logger} from "./logger.js";
 
 config();
@@ -15,7 +16,7 @@ createServer((req, res) => {
         "    <meta charset=\"UTF-8\">\n" +
         "    <meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge\">\n" +
         "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n" +
-        "    <title>Document</title>\n" +
+        "    <title>Groovey</title>\n" +
         "</head>\n" +
         "<body>\n" +
         "    \n" +
@@ -28,6 +29,8 @@ createServer((req, res) => {
     res.end()
 }).listen(process.env.PORT || 5001);
 
+mongoose.connect(process.env.MONGOURI!).then(() => console.log('Connected to DB successfully')).catch(() => console.error('Failed to connect to DB'));
+
 export const client = new Client({intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.GUILD_MESSAGES, Intents.FLAGS.GUILD_VOICE_STATES]});
 
 client.on("ready", () => {
@@ -36,7 +39,7 @@ client.on("ready", () => {
 
 client.on("messageCreate", (message) => {
     if (message.content.startsWith('-') && !message.author.bot && message.guildId) {
-        messageDispatcher(message)?.catch(x => logger.error(`${x}`));
+        messageDispatcher(message)?.catch((x: any) => logger.error(`${x}`, ''));
     }
 });
 
