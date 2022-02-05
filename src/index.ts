@@ -29,7 +29,7 @@ createServer((req, res) => {
     res.end()
 }).listen(process.env.PORT || 5001);
 
-mongoose.connect(process.env.MONGOURI!).then(() => console.log('Connected to DB successfully')).catch(() => console.error('Failed to connect to DB'));
+mongoose.connect(process.env.MONGOURI!).then(() => console.log('Connected to DB successfully')).catch((e) => console.error(`Failed to connect to DB : ${e}`));
 
 export const client = new Client({intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.GUILD_MESSAGES, Intents.FLAGS.GUILD_VOICE_STATES]});
 
