@@ -15,12 +15,17 @@ export const secondsToTime = (seconds: number) => {
     }
 };
 
+const urlRegex = new RegExp("^(https?:\\/\\/)?((([a-z\\d]([a-z\\d-]*[a-z\\d])*)\\.)+[a-z]{2,}|((\\d{1,3}\\.){3}\\d{1,3}))(\:\\d+)?(\\/[-a-z\\d%_.~+]*)*(\\?[;&a-z\\d%_.~+=-]*)?(\#[-a-z\\d_]*)?$", 'i');
 export const isValidURL = (str: string) => {
-    const pattern = new RegExp('^(https?:\\/\\/)?' +
-        '((([a-z\\d]([a-z\\d-]*[a-z\\d])*)\\.)+[a-z]{2,}|' +
-        '((\\d{1,3}\\.){3}\\d{1,3}))' +
-        '(\\:\\d+)?(\\/[-a-z\\d%_.~+]*)*' +
-        '(\\?[;&a-z\\d%_.~+=-]*)?' +
-        '(\\#[-a-z\\d_]*)?$', 'i');
-    return pattern.exec(str);
+    return urlRegex.exec(str);
+}
+
+export const splitArrayIntoChunks = <T>(arr : Array<T>, chunk: number) => {
+    let result = [];
+    for (let i=0; i < arr.length; i += chunk) {
+        let temp;
+        temp = arr.slice(i, i + chunk);
+        result.push(temp);
+    }
+    return result;
 }
