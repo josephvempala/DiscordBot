@@ -124,7 +124,7 @@ function registerGuildPlayerEventListeners(guildPlayer: IGuildMusicPlayer) {
             logger.debug(`Added Timeout for bot to leave as queue empty`, guildPlayer.guild.id);
             return;
         }
-        logger.debug(`$finished playing ${guildPlayer.currentlyPlaying!.title}`, guildPlayer.guild.id);
+        logger.debug(`finished playing ${guildPlayer.currentlyPlaying!.title}`, guildPlayer.guild.id);
         playNext(guildPlayer.voiceConnection, guildPlayer.playerMessages.get('latestToQueue')!);
     });
     guildPlayer.player.addListener(AudioPlayerStatus.Playing, async (oldState) => {
@@ -149,7 +149,7 @@ async function getAudioStream(info: IBasicVideoInfo) {
     return [null, null] as GetAudioStreamResult;
 }
 
-async function playNext(voiceConnection: VoiceConnection, message: Message): Promise<void> {
+async function playNext(voiceConnection: VoiceConnection, message: Message) {
     const guildPlayer = guildPlayers[message.guildId!];
     if (guildPlayer.queue.length <= 0) return;
     const audioToPlay = guildPlayer.queue.shift();
@@ -164,7 +164,7 @@ async function playNext(voiceConnection: VoiceConnection, message: Message): Pro
     }
     message.react('⛔');
     message.channel.send(`${stream[1]} for ${audioToPlay!.title}`)
-    return playNext(voiceConnection, message);
+    playNext(voiceConnection, message);
 }
 
 async function searchByQueryString(param: string, message: Message) {
