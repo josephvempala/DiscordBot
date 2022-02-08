@@ -15,14 +15,14 @@ import {
     getYoutubeSearchResultInfo,
     parseYouTubePlayParameter
 } from "./youTube";
-import {isValidURL, secondsToTime, shuffleArray, timer} from "./util"
-import {IBasicVideoInfo, VideoInfoType} from "./Interfaces/IBasicVideoInfo";
+import {isValidURL, secondsToTime, shuffleArray, timer} from "../lib/util"
+import {IBasicVideoInfo, VideoInfoType} from "../Interfaces/IBasicVideoInfo";
 import {getSoundCloudAudioStream, parseSoundCloudPlayParameter} from "./soundCloud";
-import {GetAudioStreamResult} from "./Interfaces/GetAudioStreamResult";
+import {GetAudioStreamResult} from "../Interfaces/GetAudioStreamResult";
 import {getMixlrAudioStream, parseMixlrPlayParameter} from "./mixlr";
 import {logger} from "./logger.js";
-import {client} from "./index";
-import {IGuildMusicPlayer} from "./Interfaces/IGuildMusicPlayer";
+import {client} from "../index";
+import {IGuildMusicPlayer} from "../Interfaces/IGuildMusicPlayer";
 
 type GuildId = string;
 type MemberId = string;
@@ -202,17 +202,17 @@ export function play(message: Message, param: string) {
         guildPlayer.player.unpause();
         message.channel.send(`Resumed ${guildPlayer.currentlyPlaying!.title}`);
         logger.debug(`Un-paused music player ${guildPlayer.currentlyPlaying!.title}`, guildPlayer.guild.id);
-        return;
+        return true;
     }
     if (isNaN(+param)) {
         addToQueue(param, message);
         logger.debug(`Added '${param}' for youtube string search`, message.guildId!);
-        return;
+        return true;
     }
     if (+param && searchResults && +param <= searchResults.length) {
         addToQueue(searchResults[+param - 1].url, message);
         logger.debug(`Selected song number '${param}' from search results`, guildPlayer.guild.id);
-        return;
+        return true;
     }
     if (guildPlayer && param != "" && +param <= guildPlayer.queue.length + 1) {
         logger.debug(`Selected song number '${param}' from queue`, guildPlayer.guild.id);
@@ -225,15 +225,16 @@ export function play(message: Message, param: string) {
             guildPlayer.queue.unshift(targetSong);
         }
         playNext(guildPlayer.voiceConnection, message);
-        return;
+        return true;
     }
     message.channel.send(`Song number '${param}' is not valid`);
+    return false;
 }
 
 export async function search(message: Message, param: string) {
     if (!message.member!.voice.channel) {
         message.channel.send("Please join a voice channel to listen");
-        return;
+        return false;
     }
     if (!guildPlayers[message.guildId!]) createNewGuildPlayer(message);
     const guildPlayer = guildPlayers[message.guildId!];
@@ -247,19 +248,19 @@ export async function search(message: Message, param: string) {
     let msg = '**Please select a track with the -p 1-5 command**\n';
     guildPlayer.playSearch!.forEach((x, i) => msg += `**#${i + 1}** ${x.title} \`[${x.isLiveStream ? "LIVE 🔴" : secondsToTime(x.length)}]\`\n`);
     message.channel.send(msg);
+    return true;
 }
 
 export async function addToQueue(param: string, message: Message) {
     if (!message.member!.voice.channel) {
         message.channel.send("Please join a voice channel to listen");
-        return;
+        return false;
     }
     let guildPlayer = guildPlayers[message.guildId!];
     const urls = await parsePlayParameter(param, message);
     if (!urls) {
-        message.react('⛔')
         message.channel.send("Unable to find " + param);
-        return;
+        return false;
     }
     if (!guildPlayer) guildPlayer = createNewGuildPlayer(message, [...urls]);
     else guildPlayer.queue = [...guildPlayer.queue, ...urls];
@@ -268,9 +269,10 @@ export async function addToQueue(param: string, message: Message) {
     if (urls.length > 1) message.channel.send(`Added playlist of ${urls.length} songs to the queue`);
     else {
         guildPlayer.playerMessages.set('addedTrack', await message.channel.send(`Added ${urls[0].title} queue \`[${urls[0].isLiveStream ? "LIVE 🔴" : secondsToTime(urls[0].length)}]\``));
-        message.react("👍");
+
     }
     if (guildPlayer.player.state.status === AudioPlayerStatus.Idle) playNext(guildPlayer.voiceConnection, message);
+    return true;
 }
 
 export function voiceChannelChange(oldState: VoiceState, newState: VoiceState) {
@@ -306,86 +308,85 @@ export function stop(message: Message) {
     const guildPlayer = guildPlayers[message.guildId!];
     if (!guildPlayer || guildPlayer.player.state.status !== AudioPlayerStatus.Playing) {
         message.channel.send("I am not currently playing any music");
-        return;
+        return false;
     }
     guildPlayer.queue = [];
     guildPlayer.player.stop();
-    message.react("👍");
+    return true;
 }
 
 export function shuffle(message: Message) {
     const guildPlayer = guildPlayers[message.guildId!];
     if (!guildPlayer || guildPlayer.queue.length === 0) {
         message.channel.send("The queue is empty");
-        return;
+        return false;
     }
     shuffleArray(guildPlayer.queue);
-    message.react("👍");
-
+    return true;
 }
 
 export function skip(message: Message) {
     const guildPlayer = guildPlayers[message.guildId!];
     if (!guildPlayer || guildPlayer.player.state.status !== AudioPlayerStatus.Playing) {
         message.channel.send("I am not currently playing any music");
-        return;
+        return false;
     }
     guildPlayer.player.stop();
-    message.react("👍");
+    return true;
 }
 
 export function clear(message: Message) {
     const guildPlayer = guildPlayers[message.guildId!];
     if (!guildPlayer || guildPlayer.queue.length == 0) {
         message.channel.send("The queue is empty");
-        return;
+        return false;
     }
     guildPlayer.queue = [];
-    message.react("👍");
+    return true;
 }
 
 export function getQueue(param: string, message: Message) {
     const guildPlayer = guildPlayers[message.guildId!];
     if (!guildPlayer || guildPlayer.queue.length <= 0 && !guildPlayer.currentlyPlaying) {
         message.channel.send("The queue is empty");
-        return;
+        return false;
     }
     let msg = `►**#1** ${guildPlayer.currentlyPlaying?.title} \`[${guildPlayer.currentlyPlaying?.isLiveStream ? "LIVE 🔴" : secondsToTime(guildPlayer.currentlyPlaying?.length!)}]\`\n`
     if (!param) {
         guildPlayer.queue.slice(0, 5).forEach((x, i) => msg += `**#${i + 2}** ${x.title} \`[${x.isLiveStream ? "LIVE 🔴" : secondsToTime(x.length)}]\`\n`);
         message.channel.send(msg);
-        return;
+        return true;
     }
     if (isNaN(+param)) {
         message.channel.send("Please enter number of queue entries to view");
-        return;
+        return false;
     }
     const queueSlice = guildPlayer.queue.slice(0, +param);
     let i = 2;
     for (const x of queueSlice) {
         if (msg.length > 3500) {
-            return;
+            return false;
         }
         msg += `**#${i}** ${x.title} \`[${x.isLiveStream ? "LIVE 🔴" : secondsToTime(x.length)}]\`\n`;
         i++;
     }
-    message.react("👍");
     message.channel.send(msg);
+    return true;
 }
 
 export function bbpm(message: Message) {
     addToQueue('https://mixlr.com/rjlee27/', message);
-    message.react("👍");
+    return true;
 }
 
 export function getNowPlaying(message: Message) {
     const currentlyPlaying = guildPlayers[message.guildId!].currentlyPlaying;
     if (!currentlyPlaying) {
         message.channel.send("I am not currently playing any music");
-        return;
+        return false;
     }
     message.channel.send(`${currentlyPlaying.title} \`[${currentlyPlaying.isLiveStream ? "LIVE 🔴" : secondsToTime(currentlyPlaying.length)}]\`\n`);
-    message.react("👍");
+    return true;
 }
 
 export function pause(message: Message) {
@@ -394,10 +395,11 @@ export function pause(message: Message) {
         guildPlayer.player.pause();
         message.channel.send(`paused ${guildPlayer.currentlyPlaying!.title}`);
     }
-    message.react("👍");
+    return true;
 }
 
 export function leave(message: Message) {
     removeGuildPlayer(guildPlayers[message.guildId!]);
     message.react("👋");
+    return true;
 }

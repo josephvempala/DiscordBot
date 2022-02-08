@@ -1,4 +1,4 @@
-﻿import {ILogReading, logModel} from "./Models/log";
+﻿import {ILogReading, logModel} from "../Models/log";
 
 class MusicPlayerLogger {
 
@@ -34,13 +34,13 @@ class MusicPlayerLogger {
     }
 
     public debug(msg: string, guildId: string) {
-        const time = Date.now();
+        const time = new Date();
         console.log(`[${time.toString()}][DEBUG] : ${msg}`);
         MusicPlayerLogger.addLogToBucket({msg: msg, type: 'DEBUG', timestamp: time, guildId: guildId});
     }
 
     public error(msg: string, guildId: string) {
-        const time = Date.now();
+        const time = new Date;
         console.error(`[${time.toString()}][ERROR] : ${msg}`);
         MusicPlayerLogger.addLogToBucket({msg: msg, type: 'ERROR', timestamp: time, guildId: guildId});
     }

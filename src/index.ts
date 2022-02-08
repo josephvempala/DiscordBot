@@ -1,10 +1,11 @@
 import {Client, Intents} from "discord.js";
 import {config} from "dotenv";
-import {messageDispatcher} from "./Dispatcher";
+import {musicPlayerDispatcher} from "./MusicPlayer/dispatcher";
 import {createServer} from "http";
-import {voiceChannelChange} from "./MusicPlayer";
 import mongoose from "mongoose";
-import {logger} from "./logger.js";
+import {logger} from "./MusicPlayer/logger.js";
+import {RateLimiter} from "./lib/RateLimiter";
+import {voiceChannelChange} from "./MusicPlayer/MusicPlayer";
 
 config();
 createServer((req, res) => {
@@ -37,9 +38,15 @@ client.on("ready", () => {
     console.log("bot is ready");
 });
 
+const rateLimiter = new RateLimiter(4, 0.34);
+
 client.on("messageCreate", (message) => {
     if (message.content.startsWith('-') && !message.author.bot && message.guildId) {
-        messageDispatcher(message)?.catch((x: any) => logger.error(`${x}`, ''));
+        if(rateLimiter.isRateLimited(message.author.id)){
+            message.reply("Please wait before issuing more commands");
+            return;
+        }
+        musicPlayerDispatcher(message).catch((x: any) => logger.error(`${x}`, ''));
     }
 });
 

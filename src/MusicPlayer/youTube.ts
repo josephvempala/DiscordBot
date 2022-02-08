@@ -2,8 +2,8 @@ import {Readable} from "node:stream";
 import {chooseFormat, downloadFromInfo, getBasicInfo, getInfo} from 'ytdl-core-discord';
 import ytpl from "ytpl";
 import ytsr, {Video} from "ytsr";
-import {IBasicVideoInfo, VideoInfoType} from "./Interfaces/IBasicVideoInfo";
-import {GetAudioStreamResult} from "./Interfaces/GetAudioStreamResult";
+import {IBasicVideoInfo, VideoInfoType} from "../Interfaces/IBasicVideoInfo";
+import {GetAudioStreamResult} from "../Interfaces/GetAudioStreamResult";
 
 export async function getYoutubeAudioStream(url: string): Promise<GetAudioStreamResult> {
     try {

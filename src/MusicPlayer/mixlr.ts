@@ -1,9 +1,9 @@
 import miniget from 'miniget';
 import axios from 'axios';
 import {Readable} from "node:stream";
-import {GetAudioStreamResult} from "./Interfaces/GetAudioStreamResult";
-import {IBasicVideoInfo, VideoInfoType} from "./Interfaces/IBasicVideoInfo";
-import {timer} from "./util";
+import {GetAudioStreamResult} from "../Interfaces/GetAudioStreamResult";
+import {IBasicVideoInfo, VideoInfoType} from "../Interfaces/IBasicVideoInfo";
+import {timer} from "../lib/util";
 
 const urlValidationRegex = /(?:https?:\/\/)?(?:www\.)?(mixlr\.com\/[^\/]*?\/\B)/gm;
 

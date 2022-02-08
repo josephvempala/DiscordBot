@@ -1,4 +1,4 @@
-import {client} from "./index";
+import {client} from "../index";
 import {TextChannel} from "discord.js";
 
 export function broadcastMessage(message: string) {
@@ -10,4 +10,5 @@ export function broadcastMessage(message: string) {
             }
         }
     });
+    return true;
 }

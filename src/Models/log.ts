@@ -1,16 +1,16 @@
 import mongoose, {Model, Types} from 'mongoose';
-import {splitArrayIntoChunks} from "../util";
+import {splitArrayIntoChunks} from "../lib/util";
 
 export interface ILogReading {
     guildId: string,
     type: string,
-    timestamp: number,
+    timestamp: Date,
     msg: string
 }
 
 export interface ILog {
-    startTime: number,
-    endTime: number,
+    startTime: Date,
+    endTime: Date,
     readings: Types.DocumentArray<ILogReading>;
 }
 
@@ -24,13 +24,13 @@ export interface ILogModel extends Model<ILogDoc> {
 const logEntrySchema = new mongoose.Schema({
     guildId: String,
     type: String,
-    timestamp: Number,
+    timestamp: Date,
     msg: String
 });
 
 const logSchema = new mongoose.Schema<ILog, ILogModel>({
-    startTime: Number,
-    endTime: Number,
+    startTime: Date,
+    endTime: Date,
     readings: [logEntrySchema]
 });
 
