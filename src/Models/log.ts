@@ -35,7 +35,7 @@ const logSchema = new mongoose.Schema<ILog, ILogModel>({
 });
 
 logSchema.static('writeReadings', async function (this: ILogModel, readings: ILogReading[]) {
-    const latestDocument = await this.findOne().sort('-endTime');
+    const latestDocument = await this.findOne().sort('-_id');
     if (!latestDocument && readings.length <= 50) {
         const doc = await this.create({
             startTime: readings[0].timestamp,
