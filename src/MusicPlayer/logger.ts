@@ -20,7 +20,7 @@ class MusicPlayerLogger {
     }
 
     private static writeBucketToDatabase() {
-        if (!MusicPlayerLogger.readings.length)
+        if (MusicPlayerLogger.readings.length === 0)
             return;
         logModel.writeReadings(MusicPlayerLogger.readings);
         MusicPlayerLogger.readings = [];
