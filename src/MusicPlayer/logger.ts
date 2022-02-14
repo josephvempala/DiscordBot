@@ -1,7 +1,6 @@
-﻿import {ILogReading, logModel} from "../Models/log";
+﻿import {ILogReading, logModel} from '../Models/log';
 
 class MusicPlayerLogger {
-
     private static instance: MusicPlayerLogger;
     private static readings: ILogReading[];
     private static writeInterval: NodeJS.Timer;
@@ -14,14 +13,13 @@ class MusicPlayerLogger {
 
     public static getInstance() {
         if (!MusicPlayerLogger.instance) {
-            return MusicPlayerLogger.instance = new MusicPlayerLogger();
+            return (MusicPlayerLogger.instance = new MusicPlayerLogger());
         }
         return MusicPlayerLogger.instance;
     }
 
     private static writeBucketToDatabase() {
-        if (MusicPlayerLogger.readings.length === 0)
-            return;
+        if (MusicPlayerLogger.readings.length === 0) return;
         logModel.writeReadings(MusicPlayerLogger.readings);
         MusicPlayerLogger.readings = [];
     }
@@ -40,11 +38,10 @@ class MusicPlayerLogger {
     }
 
     public error(msg: string, guildId: string) {
-        const time = new Date;
+        const time = new Date();
         console.error(`[${time.toString()}][ERROR] : ${msg}`);
         MusicPlayerLogger.addLogToBucket({msg: msg, type: 'ERROR', timestamp: time, guildId: guildId});
     }
-
 }
 
 export const logger = MusicPlayerLogger.getInstance();

@@ -1,11 +1,12 @@
-import {IBasicVideoInfo} from "./IBasicVideoInfo";
-import {AudioPlayer, VoiceConnection} from "@discordjs/voice";
-import {Guild, GuildMember, Message, TextChannel} from "discord.js";
+import {IBasicVideoInfo} from './IBasicVideoInfo';
+import {AudioPlayer, VoiceConnection} from '@discordjs/voice';
+import {Guild, GuildMember, Message, TextChannel} from 'discord.js';
 
 type MemberId = string;
 
 export interface IGuildMusicPlayer {
     queue: IBasicVideoInfo[];
+    queueHistory: IBasicVideoInfo[];
     player: AudioPlayer;
     voiceConnection: VoiceConnection;
     textChannel: TextChannel;

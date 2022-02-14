@@ -1,6 +1,7 @@
-import {GetAudioStreamResult} from "../Interfaces/GetAudioStreamResult";
-import {IBasicVideoInfo, VideoInfoType} from "../Interfaces/IBasicVideoInfo";
+import {GetAudioStreamResult} from '../Interfaces/GetAudioStreamResult';
+import {IBasicVideoInfo, VideoInfoType} from '../Interfaces/IBasicVideoInfo';
 
+// eslint-disable-next-line @typescript-eslint/no-var-requires
 const scdl = require('soundcloud-downloader').create({});
 
 export async function getSoundCloudAudioStream(url: string): Promise<GetAudioStreamResult> {
@@ -14,16 +15,17 @@ export async function getSoundCloudAudioStream(url: string): Promise<GetAudioStr
 
 export async function parseSoundCloudPlayParameter(param: string): Promise<IBasicVideoInfo[] | null> {
     try {
-        if (!scdl.isValidUrl(param))
-            return null;
+        if (!scdl.isValidUrl(param)) return null;
         const info = await scdl.getInfo(param);
-        return [{
-            url: info.uri!,
-            type: VideoInfoType.SoundCloud,
-            length: info.duration! / 1000,
-            title: info.title!,
-            isLiveStream: +info.duration == 0
-        }]
+        return [
+            {
+                url: info.uri!,
+                type: VideoInfoType.SoundCloud,
+                length: info.duration! / 1000,
+                title: info.title!,
+                isLiveStream: +info.duration == 0,
+            },
+        ];
     } catch (e) {
         return null;
     }

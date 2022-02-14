@@ -1,17 +1,16 @@
 import miniget from 'miniget';
 import axios from 'axios';
-import {Readable} from "node:stream";
-import {GetAudioStreamResult} from "../Interfaces/GetAudioStreamResult";
-import {IBasicVideoInfo, VideoInfoType} from "../Interfaces/IBasicVideoInfo";
-import {timer} from "../lib/util";
+import {Readable} from 'node:stream';
+import {GetAudioStreamResult} from '../Interfaces/GetAudioStreamResult';
+import {IBasicVideoInfo, VideoInfoType} from '../Interfaces/IBasicVideoInfo';
+import {timer} from '../lib/util';
 
 const urlValidationRegex = /(?:https?:\/\/)?(?:www\.)?(mixlr\.com\/[^\/]*?\/\B)/gm;
 
 export async function getMixlrAudioStream(url: string): Promise<GetAudioStreamResult> {
     let metadata;
     for (let i = 0; i < 5 && !metadata; i++) {
-        metadata = await axios.get(url).catch(() => {
-        });
+        metadata = await axios.get(url).catch(() => null);
         await timer(100 * i);
     }
     if (!metadata) {
@@ -24,7 +23,7 @@ export async function getMixlrAudioStream(url: string): Promise<GetAudioStreamRe
         maxRetries: 10,
         maxReconnects: 10,
         highWaterMark: 1 << 25,
-        backoff: {inc: 200, max: 10}
+        backoff: {inc: 200, max: 10},
     }) as Readable;
     if (readable) {
         return [readable, null];
@@ -39,8 +38,7 @@ export async function parseMixlrPlayParameter(url: string): Promise<IBasicVideoI
     }
     let result;
     for (let i = 0; i < 5 && !result; i++) {
-        result = await axios.get(`https://${urlMatch[1]}`).catch(() => {
-        });
+        result = await axios.get(`https://${urlMatch[1]}`).catch(() => null);
         await timer(100 * i);
     }
     if (!result) {
@@ -48,11 +46,13 @@ export async function parseMixlrPlayParameter(url: string): Promise<IBasicVideoI
     }
     const userId = /({"id":)(\d*?),/.exec(result.data);
     const playUrl = `https://api.mixlr.com/users/${userId![2]}?source=embed`;
-    return [{
-        url: playUrl,
-        title: "Mixlr Stream",
-        type: VideoInfoType.Mixlr,
-        length: 0,
-        isLiveStream: true
-    }];
+    return [
+        {
+            url: playUrl,
+            title: 'Mixlr Stream',
+            type: VideoInfoType.Mixlr,
+            length: 0,
+            isLiveStream: true,
+        },
+    ];
 }

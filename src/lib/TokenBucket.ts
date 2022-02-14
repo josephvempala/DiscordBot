@@ -1,9 +1,8 @@
 export class TokenBucket {
+    private lastFilled: number;
+    private tokens: number;
 
-    private lastFilled : number;
-    private tokens : number;
-
-    public constructor(private readonly capacity : number, private readonly fillPerSecond : number) {
+    public constructor(private readonly capacity: number, private readonly fillPerSecond: number) {
         this.lastFilled = Math.floor(Date.now() / 1000);
         this.tokens = capacity;
     }
@@ -19,15 +18,15 @@ export class TokenBucket {
         return false;
     }
 
-    public calculateTokenAmountFromTime(unixTimestamp : number){
+    public calculateTokenAmountFromTime(unixTimestamp: number) {
         const now = Math.floor(unixTimestamp / 1000);
-        const secondsElapsedFromLastFill = (now - this.lastFilled);
+        const secondsElapsedFromLastFill = now - this.lastFilled;
         const tokensToAdd = Math.floor(secondsElapsedFromLastFill * this.fillPerSecond);
         return Math.min(this.capacity, this.tokens + tokensToAdd);
     }
 
     private refill() {
-        const now = Date.now()
+        const now = Date.now();
         this.tokens = this.calculateTokenAmountFromTime(now);
         this.lastFilled = now / 1000;
     }
