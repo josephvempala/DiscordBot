@@ -296,6 +296,7 @@ export function voiceChannelChange(oldState: VoiceState, newState: VoiceState) {
     const newChannelId = newState.channelId;
     const oldGuildPlayer = guildPlayers[oldState.guild.id];
     const newGuildPlayer = guildPlayers[newState.guild.id];
+    if (oldChannelId === newChannelId) return;
     if (oldChannelId && oldGuildPlayer) {
         const voiceChannelMemberMap = oldGuildPlayer.voiceChannelMembers;
         if (voiceChannelMemberMap.has(oldState.member!.id)) {

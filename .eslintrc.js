@@ -17,5 +17,7 @@ module.exports = {
         'space-in-parens': 'error',
         'no-multiple-empty-lines': 'error',
         'prefer-const': 'error',
+        '@typescript-eslint/no-non-null-assertion': 'off',
+        '@typescript-eslint/no-explicit-any': 'off',
     },
 };
