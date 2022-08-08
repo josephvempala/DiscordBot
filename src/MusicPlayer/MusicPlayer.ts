@@ -1,4 +1,4 @@
-import {GuildMember, Message, TextChannel, VoiceState} from 'discord.js';
+import { GuildMember, Message, TextChannel, VoiceState } from 'discord.js';
 import {
     AudioPlayerStatus,
     createAudioPlayer,
@@ -9,21 +9,21 @@ import {
     VoiceConnection,
     VoiceConnectionStatus,
 } from '@discordjs/voice';
-import {getYoutubeAudioStream, getYoutubeSearchResult, getYoutubeSearchResultInfo, parseYouTubePlayParameter} from './youTube';
-import {isValidURL, secondsToTime, shuffleArray, timer} from '../lib/util';
-import {IBasicVideoInfo, VideoInfoType} from '../Interfaces/IBasicVideoInfo';
-import {getSoundCloudAudioStream, parseSoundCloudPlayParameter} from './soundCloud';
-import {GetAudioStreamResult} from '../Interfaces/GetAudioStreamResult';
-import {getMixlrAudioStream, parseMixlrPlayParameter} from './mixlr';
-import {logger} from './logger.js';
-import {client} from '../index';
-import {IGuildMusicPlayer} from '../Interfaces/IGuildMusicPlayer';
-import {MaxQueueHistorySize, MaxQueueSize} from '../lib/Constants';
+import { getYoutubeAudioStream, getYoutubeSearchResult, getYoutubeSearchResultInfo, parseYouTubePlayParameter } from './youTube';
+import { isValidURL, secondsToTime, shuffleArray, timer } from '../lib/util';
+import { IBasicVideoInfo, VideoInfoType } from '../Interfaces/IBasicVideoInfo';
+import { getSoundCloudAudioStream, parseSoundCloudPlayParameter } from './soundCloud';
+import { GetAudioStreamResult } from '../Interfaces/GetAudioStreamResult';
+import { getMixlrAudioStream, parseMixlrPlayParameter } from './mixlr';
+import { logger } from './logger.js';
+import { client } from '../index';
+import { IGuildMusicPlayer } from '../Interfaces/IGuildMusicPlayer';
+import { MaxQueueHistorySize, MaxQueueSize } from '../lib/Constants';
 
 type GuildId = string;
 type MemberId = string;
 
-const guildPlayers: {[guildId: GuildId]: IGuildMusicPlayer} = {};
+const guildPlayers: { [guildId: GuildId]: IGuildMusicPlayer } = {};
 
 function createNewGuildPlayer(message: Message, queue?: IBasicVideoInfo[]) {
     const guildPlayer: IGuildMusicPlayer = {
@@ -133,9 +133,8 @@ function registerGuildPlayerEventListeners(guildPlayer: IGuildMusicPlayer) {
     guildPlayer.player.addListener(AudioPlayerStatus.Playing, async (oldState) => {
         guildPlayer.replayRetries = 0;
         if (oldState.status === AudioPlayerStatus.AutoPaused || oldState.status === AudioPlayerStatus.Paused) return;
-        const newPlayingMessage = `Now Playing ${guildPlayer.currentlyPlaying!.title}, \`[${
-            guildPlayer.currentlyPlaying!.isLiveStream ? 'LIVE 🔴' : secondsToTime(guildPlayer.currentlyPlaying!.length)
-        }]\``;
+        const newPlayingMessage = `Now Playing ${guildPlayer.currentlyPlaying!.title}, \`[${guildPlayer.currentlyPlaying!.isLiveStream ? 'LIVE 🔴' : secondsToTime(guildPlayer.currentlyPlaying!.length)
+            }]\``;
         guildPlayer.playerMessages.set('playRequest', await guildPlayer.playerMessages.get('latestToQueue')!.channel.send(newPlayingMessage));
     });
 }
@@ -160,7 +159,7 @@ async function playNext(voiceConnection: VoiceConnection, message: Message) {
     guildPlayer.currentlyPlaying = audioToPlay!;
     const stream = await getAudioStream(audioToPlay!);
     if (stream[0]) {
-        const resource = createAudioResource(stream[0], {inputType: StreamType.Arbitrary});
+        const resource = createAudioResource(stream[0], { inputType: StreamType.Arbitrary });
         guildPlayer.player.play(resource);
         logger.debug(`Now playing... ${audioToPlay!.title}`, guildPlayer.guild.id);
         return;
@@ -384,9 +383,8 @@ export function getQueue(param: string, message: Message) {
         message.channel.send('The queue is empty');
         return false;
     }
-    let msg = `►**#1** ${guildPlayer.currentlyPlaying?.title} \`[${
-        guildPlayer.currentlyPlaying?.isLiveStream ? 'LIVE 🔴' : secondsToTime(guildPlayer.currentlyPlaying!.length)
-    }]\`\n`;
+    let msg = `►**#1** ${guildPlayer.currentlyPlaying?.title} \`[${guildPlayer.currentlyPlaying?.isLiveStream ? 'LIVE 🔴' : secondsToTime(guildPlayer.currentlyPlaying!.length)
+        }]\`\n`;
     if (!param) {
         guildPlayer.queue
             .slice(0, 5)
@@ -412,7 +410,7 @@ export function getQueue(param: string, message: Message) {
 }
 
 export async function bbpm(message: Message) {
-    return await addToQueue('https://mixlr.com/rjlee27/', message);
+    return await addToQueue('https://api.mixlr.com/v3/channel_view/thebbpm', message);
 }
 
 export function getNowPlaying(message: Message) {
