@@ -1,23 +1,20 @@
 module.exports = {
+    env: {
+        browser: true,
+        es2021: true,
+    },
+    extends: ['eslint:recommended', 'plugin:@typescript-eslint/recommended'],
+    overrides: [],
     parser: '@typescript-eslint/parser',
-    extends: ['plugin:@typescript-eslint/recommended', 'plugin:prettier/recommended'],
     parserOptions: {
-        ecmaVersion: 2020,
+        ecmaVersion: 'latest',
         sourceType: 'module',
     },
-    env: {
-        es6: true,
-        node: true,
-    },
+    plugins: ['@typescript-eslint'],
     rules: {
-        'no-var': 'error',
-        semi: 'error',
-        indent: ['error', 4, {SwitchCase: 1}],
-        'no-multi-spaces': 'error',
-        'space-in-parens': 'error',
-        'no-multiple-empty-lines': 'error',
-        'prefer-const': 'error',
-        '@typescript-eslint/no-non-null-assertion': 'off',
-        '@typescript-eslint/no-explicit-any': 'off',
+        indent: ['error', 4],
+        'linebreak-style': ['error', 'unix'],
+        quotes: ['error', 'single'],
+        semi: ['error', 'always'],
     },
 };

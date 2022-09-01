@@ -1,20 +1,23 @@
-import {Readable} from 'node:stream';
-import {chooseFormat, downloadFromInfo, getBasicInfo, getInfo} from 'ytdl-core-discord';
+import { Readable } from 'node:stream';
+import { chooseFormat, downloadFromInfo, getBasicInfo, getInfo } from 'ytdl-core';
 import ytpl from 'ytpl';
-import ytsr, {Video} from 'ytsr';
-import {IBasicVideoInfo, VideoInfoType} from '../Interfaces/IBasicVideoInfo';
-import {GetAudioStreamResult} from '../Interfaces/GetAudioStreamResult';
+import ytsr, { Video } from 'ytsr';
+import { IBasicVideoInfo, VideoInfoType } from '../Interfaces/IBasicVideoInfo';
+import { GetAudioStreamResult } from '../Interfaces/GetAudioStreamResult';
 
 export async function getYoutubeAudioStream(url: string): Promise<GetAudioStreamResult> {
     try {
         let stream: Readable;
-        const videoInfo = await getInfo(url).catch(() => null);
+        const videoInfo = await getInfo(url).catch((e) => {
+            console.log(e.message);
+            return null;
+        });
         if (!videoInfo) return [null, 'Unable to get video info'];
         if (videoInfo.videoDetails.isLiveContent) {
-            const format = chooseFormat(videoInfo.formats, {quality: [128, 127, 120, 96, 95, 94, 93]});
-            stream = downloadFromInfo(videoInfo, {highWaterMark: 1 << 25, liveBuffer: 4900, format: format});
+            const format = chooseFormat(videoInfo.formats, { quality: [128, 127, 120, 96, 95, 94, 93] });
+            stream = downloadFromInfo(videoInfo, { highWaterMark: 1 << 25, liveBuffer: 4900, format: format });
         } else {
-            stream = downloadFromInfo(videoInfo, {filter: 'audioonly', highWaterMark: 1 << 25});
+            stream = downloadFromInfo(videoInfo, { filter: 'audioonly', highWaterMark: 1 << 25 });
         }
         stream.on('error', (e: any) => {
             if (e.statusCode! === 403 || 410) {
@@ -68,7 +71,7 @@ export async function getYoutubeSearchResultInfo(param: string) {
     try {
         const filter = await ytsr.getFilters(param).then((x) => x.get('Type')!.get('Video'));
         if (!filter || !filter.url) return null;
-        const finalLinks = await ytsr(filter.url, {limit: 5}).catch(() => null);
+        const finalLinks = await ytsr(filter.url, { limit: 5 }).catch(() => null);
         if (finalLinks) {
             const items = finalLinks.items.map(async (x) => {
                 const item = x as Video;
@@ -98,7 +101,7 @@ export async function getYoutubeSearchResult(param: string): Promise<IBasicVideo
     try {
         const filter = await ytsr.getFilters(param).then((x) => x.get('Type')!.get('Video'));
         if (!filter || !filter.url) return null;
-        const finalLinks = await ytsr(param, {limit: 1}).catch(() => null);
+        const finalLinks = await ytsr(param, { limit: 1 }).catch(() => null);
         if (finalLinks) {
             const link = finalLinks.items[0] as Video;
             const duration = link.duration

@@ -1,5 +1,5 @@
-import {GetAudioStreamResult} from '../Interfaces/GetAudioStreamResult';
-import {IBasicVideoInfo, VideoInfoType} from '../Interfaces/IBasicVideoInfo';
+import { GetAudioStreamResult } from '../Interfaces/GetAudioStreamResult';
+import { IBasicVideoInfo, VideoInfoType } from '../Interfaces/IBasicVideoInfo';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const scdl = require('soundcloud-downloader').create({});
