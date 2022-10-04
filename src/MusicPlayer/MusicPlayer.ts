@@ -15,7 +15,7 @@ import { IBasicVideoInfo, VideoInfoType } from '../Interfaces/IBasicVideoInfo';
 import { getSoundCloudAudioStream, parseSoundCloudPlayParameter } from './soundCloud';
 import { GetAudioStreamResult } from '../Interfaces/GetAudioStreamResult';
 import { getMixlrAudioStream, parseMixlrPlayParameter } from './mixlr';
-import { logger } from './logger.js';
+import { logger } from '../services/logger.js';
 import { client } from '../index';
 import { IGuildMusicPlayer } from '../Interfaces/IGuildMusicPlayer';
 import { MaxQueueHistorySize, MaxQueueSize } from '../lib/Constants';

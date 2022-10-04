@@ -2,8 +2,7 @@ import { Client, Intents } from 'discord.js';
 import { config } from 'dotenv';
 import { musicPlayerDispatcher } from './MusicPlayer/dispatcher';
 import { createServer } from 'http';
-import mongoose from 'mongoose';
-import { logger } from './MusicPlayer/logger.js';
+import { logger } from './services/logger.js';
 import { RateLimiter } from './lib/RateLimiter';
 import { voiceChannelChange } from './MusicPlayer/MusicPlayer';
 
@@ -29,11 +28,6 @@ createServer((req, res) => {
     );
     res.end();
 }).listen(process.env.PORT || 5001);
-
-mongoose
-    .connect(process.env.MONGOURI!)
-    .then(() => console.log('Connected to DB successfully'))
-    .catch((e) => console.error(`Failed to connect to DB : ${e}`));
 
 export const client = new Client({ intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.GUILD_MESSAGES, Intents.FLAGS.GUILD_VOICE_STATES] });
 

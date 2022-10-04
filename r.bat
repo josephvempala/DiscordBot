@@ -1,4 +1,4 @@
-cd C:\Users\Joseph\Desktop\bot controller\DiscordBot\dist
+cd C:\Users\Joseph\Desktop\DiscordBot\dist
 :Start
 node index.js
 TIMEOUT /T 10
