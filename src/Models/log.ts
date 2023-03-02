@@ -55,7 +55,7 @@ logSchema.statics.writeReadings = async function (this: ILogModel, readings: ILo
         }
     }
     catch (e) {
-        console.log("[ERROR]:" + e);
+        console.log('[ERROR]:' + e);
     }
 };
 

@@ -19,6 +19,7 @@ import { logger } from '../services/logger.js';
 import { client } from '../index';
 import { IGuildMusicPlayer } from '../Interfaces/IGuildMusicPlayer';
 import { MaxQueueHistorySize, MaxQueueSize } from '../lib/Constants';
+import '../services/mongodb';
 
 type GuildId = string;
 type MemberId = string;
@@ -141,12 +142,12 @@ function registerGuildPlayerEventListeners(guildPlayer: IGuildMusicPlayer) {
 
 async function getAudioStream(info: IBasicVideoInfo) {
     switch (info.type) {
-        case VideoInfoType.YouTube:
-            return await getYoutubeAudioStream(info.url);
-        case VideoInfoType.SoundCloud:
-            return await getSoundCloudAudioStream(info.url);
-        case VideoInfoType.Mixlr:
-            return await getMixlrAudioStream(info.url);
+    case VideoInfoType.YouTube:
+        return await getYoutubeAudioStream(info.url);
+    case VideoInfoType.SoundCloud:
+        return await getSoundCloudAudioStream(info.url);
+    case VideoInfoType.Mixlr:
+        return await getMixlrAudioStream(info.url);
     }
     return [null, null] as GetAudioStreamResult;
 }
