@@ -1,6 +1,6 @@
-import { bbpm, clear, getNowPlaying, getQueue, leave, pause, play, previousTrack, search, shuffle, skip, stop } from './MusicPlayer';
-import { broadcastMessage } from '../lib/botutils';
-import { Message } from 'discord.js';
+import {bbpm, clear, getNowPlaying, getQueue, leave, pause, play, previousTrack, search, shuffle, skip, stop} from './MusicPlayer';
+import {broadcastMessage} from '../lib/botutils';
+import {Message} from 'discord.js';
 
 export async function musicPlayerDispatcher(message: Message) {
     const input = message.content + ' ';
@@ -25,7 +25,7 @@ export async function musicPlayerDispatcher(message: Message) {
         return;
     }
     if (!message.member?.voice.channel) {
-        message.channel.send('Please join a voice channel to listen');
+        message.author.send('Please join a voice channel to listen');
         await message.react('🛑');
         return;
     }

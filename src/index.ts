@@ -1,4 +1,4 @@
-import {Client, Intents} from 'discord.js';
+import {Client, Events, GatewayIntentBits} from 'discord.js';
 import {config} from 'dotenv';
 import {musicPlayerDispatcher} from './MusicPlayer/dispatcher';
 import {logger} from './services/logger.js';
@@ -7,11 +7,7 @@ import {voiceChannelChange} from './MusicPlayer/MusicPlayer';
 
 config();
 
-export const client = new Client({intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.GUILD_MESSAGES, Intents.FLAGS.GUILD_VOICE_STATES]});
-
-client.on('ready', () => {
-    console.log('bot is ready');
-});
+export const client = new Client({intents: [GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.Guilds]});
 
 const rateLimiter = new RateLimiter(4, 0.34);
 
@@ -25,8 +21,10 @@ client.on('messageCreate', (message) => {
     }
 });
 
+client.once(Events.ClientReady, (c) => {
+    console.log(`Ready! Logged in as ${c.user.tag}`);
+});
+
 client.on('voiceStateUpdate', voiceChannelChange);
 
-client.login(process.env.TOKEN).then(() => {
-    console.log('logged in successfully');
-});
+client.login(process.env.TOKEN);

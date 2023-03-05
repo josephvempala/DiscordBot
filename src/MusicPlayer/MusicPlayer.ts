@@ -4,6 +4,7 @@ import {
     createAudioPlayer,
     createAudioResource,
     DiscordGatewayAdapterCreator,
+    entersState,
     joinVoiceChannel,
     StreamType,
     VoiceConnection,
@@ -19,20 +20,20 @@ import {logger} from '../services/logger.js';
 import {client} from '../index';
 import {IGuildMusicPlayer} from '../Interfaces/IGuildMusicPlayer';
 import {MaxQueueHistorySize, MaxQueueSize} from '../lib/Constants';
+import fs from 'fs';
 
 type GuildId = string;
 type MemberId = string;
 
 const guildPlayers: {[guildId: GuildId]: IGuildMusicPlayer} = {};
 
-function createNewGuildPlayer(message: Message, queue?: IBasicVideoInfo[]) {
+async function createNewGuildPlayer(message: Message, queue?: IBasicVideoInfo[]) {
     const guildPlayer: IGuildMusicPlayer = {
         queue: queue ? queue : [],
         queueHistory: [],
         player: createAudioPlayer(),
         textChannel: message.channel as TextChannel,
         voiceConnection: joinVoiceChannel({
-            selfDeaf: true,
             channelId: message.member!.voice.channel!.id,
             guildId: message.guildId!,
             adapterCreator: message.guild!.voiceAdapterCreator as DiscordGatewayAdapterCreator,
@@ -45,6 +46,7 @@ function createNewGuildPlayer(message: Message, queue?: IBasicVideoInfo[]) {
         replayRetries: 0,
         playSearch: null,
     };
+    await entersState(guildPlayer.voiceConnection, VoiceConnectionStatus.Ready, 30_000);
     guildPlayers[message.guildId!] = guildPlayer;
     message.member!.voice.channel!.members!.forEach((x) => {
         guildPlayer.voiceChannelMembers.set(x.id, x);
@@ -68,7 +70,7 @@ function removeGuildPlayer(guildPlayer: IGuildMusicPlayer, reason: string) {
     clearBotLeaveTimeout(guildPlayer);
     for (const element in guildPlayer.playerMessages) {
         const message = guildPlayer.playerMessages.get(element)!;
-        if (message.deletable && !message.deleted) {
+        if (message.deletable) {
             message.delete();
             guildPlayer.playerMessages.delete(element);
         }
@@ -115,6 +117,7 @@ function registerGuildPlayerEventListeners(guildPlayer: IGuildMusicPlayer) {
         playNext(guildPlayer.voiceConnection, guildPlayer.playerMessages.get('latestToQueue')!);
     });
     guildPlayer.player.addListener(AudioPlayerStatus.Idle, () => {
+        logger.debug('idle', '');
         if (guildPlayer.playerMessages.has('playRequest')) {
             guildPlayer.playerMessages.get('playRequest')!.delete();
             guildPlayer.playerMessages.delete('playRequest');
@@ -130,13 +133,16 @@ function registerGuildPlayerEventListeners(guildPlayer: IGuildMusicPlayer) {
         pushTracksIntoHistoryQueue(guildPlayer, [guildPlayer.currentlyPlaying!]);
         playNext(guildPlayer.voiceConnection, guildPlayer.playerMessages.get('latestToQueue')!);
     });
+    guildPlayer.player.addListener(AudioPlayerStatus.Buffering, () => {
+        logger.debug('buffering', '');
+    });
     guildPlayer.player.addListener(AudioPlayerStatus.Playing, async (oldState) => {
         guildPlayer.replayRetries = 0;
         if (oldState.status === AudioPlayerStatus.AutoPaused || oldState.status === AudioPlayerStatus.Paused) return;
         const newPlayingMessage = `Now Playing ${guildPlayer.currentlyPlaying!.title}, \`[${
             guildPlayer.currentlyPlaying!.isLiveStream ? 'LIVE 🔴' : secondsToTime(guildPlayer.currentlyPlaying!.length)
         }]\``;
-        guildPlayer.playerMessages.set('playRequest', await guildPlayer.playerMessages.get('latestToQueue')!.channel.send(newPlayingMessage));
+        guildPlayer.playerMessages.set('playRequest', await guildPlayer.playerMessages.get('latestToQueue')!.author.send(newPlayingMessage));
     });
 }
 
@@ -159,19 +165,27 @@ async function playNext(voiceConnection: VoiceConnection, message: Message) {
     logger.debug(`Preparing to play ${audioToPlay?.title}`, guildPlayer.guild.id);
     guildPlayer.currentlyPlaying = audioToPlay!;
     const stream = await getAudioStream(audioToPlay!);
+    stream[0]?.addListener('error', (e) => {
+        logger.error(e.message, message.guildId!);
+    });
+    stream[0]?.addListener('close', () => {
+        logger.error('Closed', message.guildId!);
+    });
     if (stream[0]) {
-        const resource = createAudioResource(stream[0], {inputType: StreamType.Arbitrary});
+        const resource = createAudioResource('https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3', {
+            inputType: StreamType.Arbitrary,
+        });
         guildPlayer.player.play(resource);
         logger.debug(`Now playing... ${audioToPlay!.title}`, guildPlayer.guild.id);
         return;
     }
     message.react('⛔');
-    message.channel.send(`${stream[1]} for ${audioToPlay!.title}`);
+    message.author.send(`${stream[1]} for ${audioToPlay!.title}`);
     playNext(voiceConnection, message);
 }
 
 async function searchByQueryString(param: string, message: Message) {
-    const newMessage = await message.channel.send(`Searching for '${param}'`);
+    const newMessage = await message.author.send(`Searching for '${param}'`);
     const urls = await getYoutubeSearchResult(param);
     newMessage.delete();
     return urls;
@@ -202,7 +216,7 @@ async function parsePlayParameter(param: string, message: Message) {
         case 'mixlr':
             return await parseMixlrPlayParameter(param);
         default:
-            message.channel.send(`${urlRegexResult[2]} is not supported currently`);
+            message.author.send(`${urlRegexResult[2]} is not supported currently`);
     }
 }
 
@@ -217,7 +231,7 @@ export function play(message: Message, param: string) {
     }
     if (!param && guildPlayer && guildPlayer.player.state.status === AudioPlayerStatus.Paused) {
         guildPlayer.player.unpause();
-        message.channel.send(`Resumed ${guildPlayer.currentlyPlaying!.title}`);
+        message.author.send(`Resumed ${guildPlayer.currentlyPlaying!.title}`);
         logger.debug(`Un-paused music player ${guildPlayer.currentlyPlaying!.title}`, guildPlayer.guild.id);
         return true;
     }
@@ -244,23 +258,23 @@ export function play(message: Message, param: string) {
         playNext(guildPlayer.voiceConnection, message);
         return true;
     }
-    message.channel.send(`Song number '${param}' is not valid`);
+    message.author.send(`Song number '${param}' is not valid`);
     return false;
 }
 
 export async function search(message: Message, param: string) {
-    if (!guildPlayers[message.guildId!]) createNewGuildPlayer(message);
+    if (!guildPlayers[message.guildId!]) await createNewGuildPlayer(message);
     const guildPlayer = guildPlayers[message.guildId!];
     logger.debug(`Searching using ps command with '${param}' as search query`, guildPlayer.guild.id);
-    const newMessage = await message.channel.send(`Searching for '${param}'`);
+    const newMessage = await message.author.send(`Searching for '${param}'`);
     guildPlayer.playSearch = await getYoutubeSearchResultInfo(param);
     newMessage.delete();
     if (!guildPlayer.playSearch) {
-        message.channel.send(`Unable to get search results for '${param}'`);
+        message.author.send(`Unable to get search results for '${param}'`);
     }
     let msg = '**Please select a track with the -p 1-5 command**\n';
     guildPlayer.playSearch!.forEach((x, i) => (msg += `**#${i + 1}** ${x.title} \`[${x.isLiveStream ? 'LIVE 🔴' : secondsToTime(x.length)}]\`\n`));
-    message.channel.send(msg);
+    message.author.send(msg);
     return true;
 }
 
@@ -268,24 +282,24 @@ export async function addToQueue(param: string, message: Message) {
     let guildPlayer = guildPlayers[message.guildId!];
     const urls = await parsePlayParameter(param, message);
     if (!urls) {
-        message.channel.send('Unable to find ' + param);
+        message.author.send('Unable to find ' + param);
         return false;
     }
-    if (!guildPlayer) guildPlayer = createNewGuildPlayer(message, [...urls]);
+    if (!guildPlayer) guildPlayer = await createNewGuildPlayer(message, [...urls]);
     else {
         if (!pushTracksIntoQueue(guildPlayer, urls)) {
-            message.channel.send('Reached maximum queue size');
+            message.author.send('Reached maximum queue size');
             logger.error('Reached maximum queue size', guildPlayer.guild.id);
             return false;
         }
     }
     logger.debug(`AddToQueue called with '${param}' as parameter`, guildPlayer.guild.id);
     guildPlayer.playerMessages.set('latestToQueue', message);
-    if (urls.length > 1) message.channel.send(`Added playlist of ${urls.length} songs to the queue`);
+    if (urls.length > 1) message.author.send(`Added playlist of ${urls.length} songs to the queue`);
     else
         guildPlayer.playerMessages.set(
             'addedTrack',
-            await message.channel.send(`Added ${urls[0].title} queue \`[${urls[0].isLiveStream ? 'LIVE 🔴' : secondsToTime(urls[0].length)}]\``),
+            await message.author.send(`Added ${urls[0].title} queue \`[${urls[0].isLiveStream ? 'LIVE 🔴' : secondsToTime(urls[0].length)}]\``),
         );
     if (guildPlayer.player.state.status === AudioPlayerStatus.Idle) playNext(guildPlayer.voiceConnection, message);
     return true;
@@ -328,7 +342,7 @@ export function voiceChannelChange(oldState: VoiceState, newState: VoiceState) {
 export function stop(message: Message) {
     const guildPlayer = guildPlayers[message.guildId!];
     if (!guildPlayer || guildPlayer.player.state.status !== AudioPlayerStatus.Playing) {
-        message.channel.send('I am not currently playing any music');
+        message.author.send('I am not currently playing any music');
         return false;
     }
     guildPlayer.queue = [];
@@ -339,7 +353,7 @@ export function stop(message: Message) {
 export function shuffle(message: Message) {
     const guildPlayer = guildPlayers[message.guildId!];
     if (!guildPlayer || guildPlayer.queue.length === 0) {
-        message.channel.send('The queue is empty');
+        message.author.send('The queue is empty');
         return false;
     }
     shuffleArray(guildPlayer.queue);
@@ -349,7 +363,7 @@ export function shuffle(message: Message) {
 export function skip(message: Message) {
     const guildPlayer = guildPlayers[message.guildId!];
     if (!guildPlayer || guildPlayer.player.state.status !== AudioPlayerStatus.Playing) {
-        message.channel.send('I am not currently playing any music');
+        message.author.send('I am not currently playing any music');
         return false;
     }
     guildPlayer.player.stop();
@@ -359,7 +373,7 @@ export function skip(message: Message) {
 export function clear(message: Message) {
     const guildPlayer = guildPlayers[message.guildId!];
     if (!guildPlayer || guildPlayer.queue.length == 0) {
-        message.channel.send('The queue is empty');
+        message.author.send('The queue is empty');
         return false;
     }
     guildPlayer.queue = [];
@@ -369,7 +383,7 @@ export function clear(message: Message) {
 export function previousTrack(message: Message) {
     const guildPlayer = guildPlayers[message.guildId!];
     if (!guildPlayer || guildPlayer.queueHistory.length === 0) {
-        message.channel.send('No previous track found');
+        message.author.send('No previous track found');
         return false;
     }
     const previousTrack = guildPlayer.queueHistory.pop();
@@ -381,7 +395,7 @@ export function previousTrack(message: Message) {
 export function getQueue(param: string, message: Message) {
     const guildPlayer = guildPlayers[message.guildId!];
     if (!guildPlayer || (guildPlayer.queue.length <= 0 && !guildPlayer.currentlyPlaying)) {
-        message.channel.send('The queue is empty');
+        message.author.send('The queue is empty');
         return false;
     }
     let msg = `►**#1** ${guildPlayer.currentlyPlaying?.title} \`[${
@@ -391,11 +405,11 @@ export function getQueue(param: string, message: Message) {
         guildPlayer.queue
             .slice(0, 5)
             .forEach((x, i) => (msg += `**#${i + 2}** ${x.title} \`[${x.isLiveStream ? 'LIVE 🔴' : secondsToTime(x.length)}]\`\n`));
-        message.channel.send(msg);
+        message.author.send(msg);
         return true;
     }
     if (isNaN(+param)) {
-        message.channel.send('Please enter number of queue entries to view');
+        message.author.send('Please enter number of queue entries to view');
         return false;
     }
     const queueSlice = guildPlayer.queue.slice(0, +param);
@@ -407,7 +421,7 @@ export function getQueue(param: string, message: Message) {
         msg += `**#${i}** ${x.title} \`[${x.isLiveStream ? 'LIVE 🔴' : secondsToTime(x.length)}]\`\n`;
         i++;
     }
-    message.channel.send(msg);
+    message.author.send(msg);
     return true;
 }
 
@@ -418,10 +432,10 @@ export async function bbpm(message: Message) {
 export function getNowPlaying(message: Message) {
     const currentlyPlaying = guildPlayers[message.guildId!].currentlyPlaying;
     if (!currentlyPlaying) {
-        message.channel.send('I am not currently playing any music');
+        message.author.send('I am not currently playing any music');
         return false;
     }
-    message.channel.send(`${currentlyPlaying.title} \`[${currentlyPlaying.isLiveStream ? 'LIVE 🔴' : secondsToTime(currentlyPlaying.length)}]\`\n`);
+    message.author.send(`${currentlyPlaying.title} \`[${currentlyPlaying.isLiveStream ? 'LIVE 🔴' : secondsToTime(currentlyPlaying.length)}]\`\n`);
     return true;
 }
 
@@ -429,7 +443,7 @@ export function pause(message: Message) {
     const guildPlayer = guildPlayers[message.guildId!];
     if (guildPlayer.player.state.status === AudioPlayerStatus.Playing) {
         guildPlayer.player.pause();
-        message.channel.send(`paused ${guildPlayer.currentlyPlaying!.title}`);
+        message.author.send(`paused ${guildPlayer.currentlyPlaying!.title}`);
     }
     return true;
 }
