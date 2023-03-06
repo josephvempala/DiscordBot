@@ -19,6 +19,8 @@ import {logger} from '../services/logger.js';
 import {client} from '../index';
 import {IGuildMusicPlayer} from '../Interfaces/IGuildMusicPlayer';
 import {MaxQueueHistorySize, MaxQueueSize} from '../lib/Constants';
+import fs from 'fs';
+import path from 'path';
 
 type GuildId = string;
 type MemberId = string;
@@ -45,6 +47,19 @@ function createNewGuildPlayer(message: Message, queue?: IBasicVideoInfo[]) {
         replayRetries: 0,
         playSearch: null,
     };
+    //@ts-ignore
+    guildPlayer.voiceConnection.on('stateChange', (oldState, newState) => {
+        const oldNetworking = Reflect.get(oldState, 'networking');
+        const newNetworking = Reflect.get(newState, 'networking');
+
+        const networkStateChangeHandler = (oldNetworkState: any, newNetworkState: any) => {
+            const newUdp = Reflect.get(newNetworkState, 'udp');
+            clearInterval(newUdp?.keepAliveInterval);
+        };
+
+        oldNetworking?.off('stateChange', networkStateChangeHandler);
+        newNetworking?.on('stateChange', networkStateChangeHandler);
+    });
     guildPlayers[message.guildId!] = guildPlayer;
     message.member!.voice.channel!.members!.forEach((x) => {
         guildPlayer.voiceChannelMembers.set(x.id, x);
@@ -160,8 +175,11 @@ async function playNext(voiceConnection: VoiceConnection, message: Message) {
     guildPlayer.currentlyPlaying = audioToPlay!;
     const stream = await getAudioStream(audioToPlay!);
     if (stream[0]) {
+        // // const filestream = stream[0].pipe(fs.createWriteStream(path.join(__dirname, `${message.guildId}.mp3`)));
+        // const file = fs.createReadStream(path.join(__dirname, `${message.guildId}.mp3`));
         const resource = createAudioResource(stream[0], {inputType: StreamType.Arbitrary});
         guildPlayer.player.play(resource);
+
         logger.debug(`Now playing... ${audioToPlay!.title}`, guildPlayer.guild.id);
         return;
     }

@@ -12,14 +12,15 @@
     "author": "",
     "license": "ISC",
     "dependencies": {
-        "@discordjs/voice": "^0.7.2",
+        "@discordjs/opus": "^0.9.0",
+        "@discordjs/voice": "^0.14.0",
         "axios": "^0.24.0",
+        "discord-ytdl-core": "^5.0.4",
         "discord.js": "^13.2.0",
         "dotenv": "^10.0.0",
-        "ffmpeg-static": "^4.4.0",
-        "libsodium-wrappers": "^0.7.10",
         "miniget": "^4.2.1",
         "soundcloud-downloader": "^1.0.0",
+        "tweetnacl": "^1.0.3",
         "ytdl-core": "^4.11.2",
         "ytpl": "^2.2.3",
         "ytsr": "^3.8.0"
