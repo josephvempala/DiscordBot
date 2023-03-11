@@ -1,5 +1,5 @@
 import {Readable} from 'node:stream';
-import {chooseFormat, downloadFromInfo, getBasicInfo, getInfo} from 'ytdl-core';
+import {default as ytdl, chooseFormat, downloadFromInfo, getBasicInfo, getInfo} from 'ytdl-core';
 import ytpl from 'ytpl';
 import ytsr, {Video} from 'ytsr';
 import {IBasicVideoInfo, VideoInfoType} from '../Interfaces/IBasicVideoInfo';
@@ -15,9 +15,9 @@ export async function getYoutubeAudioStream(url: string): Promise<GetAudioStream
         if (!videoInfo) return [null, 'Unable to get video info'];
         if (videoInfo.videoDetails.isLiveContent) {
             const format = chooseFormat(videoInfo.formats, {quality: [128, 127, 120, 96, 95, 94, 93]});
-            stream = downloadFromInfo(videoInfo, {highWaterMark: 1 << 34, liveBuffer: 9000, format: format});
+            stream = downloadFromInfo(videoInfo, {highWaterMark: 1 << 25, liveBuffer: 4900, format: format});
         } else {
-            stream = downloadFromInfo(videoInfo, {filter: 'audioonly', dlChunkSize: 4096, highWaterMark: 1 << 34});
+            stream = ytdl(videoInfo.videoDetails.video_url, {filter: 'audioonly', highWaterMark: 1 << 25, dlChunkSize: 8192});
         }
         stream.on('error', (e: any) => {
             if (e.statusCode! === 403 || 410) {
