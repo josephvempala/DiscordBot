@@ -1,2 +1,2 @@
-cd C:\Users\Joseph\Desktop\DiscordBot\dist
+cd C:\Users\Joseph\Desktop\personal\DiscordBot\dist
 forever index.js

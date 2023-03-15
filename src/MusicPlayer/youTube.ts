@@ -17,7 +17,7 @@ export async function getYoutubeAudioStream(url: string): Promise<GetAudioStream
             const format = chooseFormat(videoInfo.formats, {quality: [128, 127, 120, 96, 95, 94, 93]});
             stream = downloadFromInfo(videoInfo, {highWaterMark: 1 << 25, liveBuffer: 4900, format: format});
         } else {
-            stream = ytdl(videoInfo.videoDetails.video_url, {filter: 'audioonly', highWaterMark: 1 << 25, dlChunkSize: 8192});
+            stream = ytdl(videoInfo.videoDetails.video_url, {filter: 'audioonly', highWaterMark: 1 << 25});
         }
         stream.on('error', (e: any) => {
             if (e.statusCode! === 403 || 410) {
