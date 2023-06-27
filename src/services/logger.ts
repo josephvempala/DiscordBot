@@ -1,4 +1,4 @@
-﻿class MusicPlayerLogger {
+﻿export class MusicPlayerLogger {
     private static instance: MusicPlayerLogger;
 
     private constructor() {

@@ -9,451 +9,293 @@ import {
     VoiceConnection,
     VoiceConnectionStatus,
 } from '@discordjs/voice';
-import {getYoutubeAudioStream, getYoutubeSearchResult, getYoutubeSearchResultInfo, parseYouTubePlayParameter} from './youTube';
+import {getYoutubeAudioStream, getYoutubeSearchResult, parseYouTubePlayParameter} from './youTube';
 import {isValidURL, secondsToTime, shuffleArray, timer} from '../lib/util';
 import {IBasicVideoInfo, VideoInfoType} from '../Interfaces/IBasicVideoInfo';
 import {getSoundCloudAudioStream, parseSoundCloudPlayParameter} from './soundCloud';
 import {GetAudioStreamResult} from '../Interfaces/GetAudioStreamResult';
 import {getMixlrAudioStream, parseMixlrPlayParameter} from './mixlr';
-import {logger} from '../services/logger.js';
+import {logger} from '../services/logger';
 import {client} from '../index';
-import {IGuildMusicPlayer} from '../Interfaces/IGuildMusicPlayer';
 import {MaxQueueHistorySize, MaxQueueSize} from '../lib/Constants';
-import fs from 'fs';
-import path from 'path';
+import {EventEmitter} from 'events';
 
-type GuildId = string;
 type MemberId = string;
+export class GuildPlayer {
+    queue: IBasicVideoInfo[];
+    queueHistory: IBasicVideoInfo[];
+    player = createAudioPlayer();
+    textChannel: TextChannel;
+    voiceConnection: VoiceConnection;
+    guildId: string;
+    currentlyPlaying: IBasicVideoInfo | null;
+    botLeaveTimeout: ReturnType<typeof setTimeout> | null;
+    voiceChannelMembers = new Map<MemberId, GuildMember>();
+    replayRetries = 0;
+    events = new EventEmitter();
 
-const guildPlayers: {[guildId: GuildId]: IGuildMusicPlayer} = {};
-
-function createNewGuildPlayer(message: Message, queue?: IBasicVideoInfo[]) {
-    const guildPlayer: IGuildMusicPlayer = {
-        queue: queue ? queue : [],
-        queueHistory: [],
-        player: createAudioPlayer(),
-        textChannel: message.channel as TextChannel,
-        voiceConnection: joinVoiceChannel({
+    constructor(message: Message) {
+        this.queue = [];
+        this.queueHistory = [];
+        this.textChannel = message.channel as TextChannel;
+        this.voiceConnection = joinVoiceChannel({
             selfDeaf: true,
             channelId: message.member!.voice.channel!.id,
             guildId: message.guildId!,
             adapterCreator: message.guild!.voiceAdapterCreator as DiscordGatewayAdapterCreator,
-        }),
-        guild: message.member!.guild!,
-        currentlyPlaying: null,
-        playerMessages: new Map<string, Message>(),
-        botLeaveTimeout: null,
-        voiceChannelMembers: new Map<MemberId, GuildMember>(),
-        replayRetries: 0,
-        playSearch: null,
-    };
-    //@ts-ignore
-    guildPlayer.voiceConnection.on('stateChange', (oldState, newState) => {
-        const oldNetworking = Reflect.get(oldState, 'networking');
-        const newNetworking = Reflect.get(newState, 'networking');
-
-        const networkStateChangeHandler = (oldNetworkState: any, newNetworkState: any) => {
-            const newUdp = Reflect.get(newNetworkState, 'udp');
-            clearInterval(newUdp?.keepAliveInterval);
-        };
-
-        oldNetworking?.off('stateChange', networkStateChangeHandler);
-        newNetworking?.on('stateChange', networkStateChangeHandler);
-    });
-    guildPlayers[message.guildId!] = guildPlayer;
-    message.member!.voice.channel!.members!.forEach((x) => {
-        guildPlayer.voiceChannelMembers.set(x.id, x);
-    });
-    if (guildPlayer.voiceChannelMembers.size < 1) {
-        guildPlayer.botLeaveTimeout = setTimeout(() => {
-            removeGuildPlayer(guildPlayer, 'Users Left channel');
-        }, 600000);
-        logger.debug(`Added Timeout for bot to leave as no listeners in vc`, guildPlayer.guild.id);
-    }
-    registerGuildPlayerEventListeners(guildPlayer);
-    guildPlayer.voiceConnection.subscribe(guildPlayer.player);
-    logger.debug(`Created music player`, guildPlayer.guild.id);
-    return guildPlayer;
-}
-
-function removeGuildPlayer(guildPlayer: IGuildMusicPlayer, reason: string) {
-    logger.debug(`Removing music player: ${reason}`, guildPlayer.guild.id);
-    if (!guildPlayers[guildPlayer.guild.id]) return;
-    delete guildPlayers[guildPlayer.guild.id];
-    clearBotLeaveTimeout(guildPlayer);
-    for (const element in guildPlayer.playerMessages) {
-        const message = guildPlayer.playerMessages.get(element)!;
-        if (message.deletable && !message.deleted) {
-            message.delete();
-            guildPlayer.playerMessages.delete(element);
-        }
-    }
-    guildPlayer.player.removeAllListeners(AudioPlayerStatus.Idle);
-    guildPlayer.player.removeAllListeners(AudioPlayerStatus.Playing);
-    guildPlayer.player.removeAllListeners('error');
-    guildPlayer.voiceConnection.removeAllListeners(VoiceConnectionStatus.Disconnected);
-    if (guildPlayer.voiceChannelMembers.has(client.user!.id)) guildPlayer.voiceConnection.destroy();
-    logger.debug(`Removed music player ${reason}`, guildPlayer.guild.id);
-}
-
-function clearBotLeaveTimeout(guildPlayer: IGuildMusicPlayer) {
-    if (!guildPlayer.botLeaveTimeout) return;
-    clearTimeout(guildPlayer.botLeaveTimeout!);
-    guildPlayer.botLeaveTimeout = null;
-}
-
-function registerGuildPlayerEventListeners(guildPlayer: IGuildMusicPlayer) {
-    guildPlayer.voiceConnection.addListener(VoiceConnectionStatus.Disconnected, () => {
-        logger.debug(`Voice disconnected`, guildPlayer.guild.id);
-        removeGuildPlayer(guildPlayer, 'Disconnected');
-    });
-    guildPlayer.player.addListener('error', async (e: any) => {
-        if (guildPlayer.playerMessages.has('playRequest')) {
-            guildPlayer.playerMessages.get('playRequest')!.delete();
-            guildPlayer.playerMessages.delete('playRequest');
-        }
-        if (e.message === 'Status code: 403' && guildPlayer.currentlyPlaying && guildPlayer.replayRetries < 5) {
-            await timer(100 * guildPlayer.replayRetries);
-            guildPlayer.queue?.unshift(guildPlayer.currentlyPlaying!);
-            guildPlayer.replayRetries++;
-            logger.debug(
-                `Error occurred in music player while attempting to play '${guildPlayer.currentlyPlaying.title}' playing retrying.. ${guildPlayer.replayRetries} retries`,
-                guildPlayer.guild.id,
-            );
-        } else {
-            logger.error(
-                `Error occurred in music player while attempting to play '${guildPlayer.currentlyPlaying?.title ?? ''}' : ${e.message}`,
-                guildPlayer.guild.id,
-            );
-        }
-        guildPlayer.player.stop();
-        playNext(guildPlayer.voiceConnection, guildPlayer.playerMessages.get('latestToQueue')!);
-    });
-    guildPlayer.player.addListener(AudioPlayerStatus.Idle, () => {
-        if (guildPlayer.playerMessages.has('playRequest')) {
-            guildPlayer.playerMessages.get('playRequest')!.delete();
-            guildPlayer.playerMessages.delete('playRequest');
-        }
-        if (guildPlayers[guildPlayer.guild.id].queue.length <= 0) {
-            guildPlayer.botLeaveTimeout = setTimeout(() => {
-                removeGuildPlayer(guildPlayer, 'finished playing music');
+        });
+        this.guildId = message.member!.guild!.id;
+        this.botLeaveTimeout = null;
+        this.currentlyPlaying = null;
+        this.voiceConnection.on('stateChange', (oldState, newState) => {
+            const oldNetworking = Reflect.get(oldState, 'networking');
+            const newNetworking = Reflect.get(newState, 'networking');
+            const networkStateChangeHandler = (oldNetworkState: any, newNetworkState: any) => {
+                const newUdp = Reflect.get(newNetworkState, 'udp');
+                clearInterval(newUdp?.keepAliveInterval);
+            };
+            oldNetworking?.off('stateChange', networkStateChangeHandler);
+            newNetworking?.on('stateChange', networkStateChangeHandler);
+        });
+        message.member!.voice.channel!.members!.forEach((x) => {
+            this.voiceChannelMembers.set(x.id, x);
+        });
+        if (this.voiceChannelMembers.size < 1) {
+            this.botLeaveTimeout = setTimeout(() => {
+                this.removeGuildPlayer('Users Left channel');
             }, 600000);
-            logger.debug(`Added Timeout for bot to leave as queue empty`, guildPlayer.guild.id);
+            logger.debug(`Added Timeout for bot to leave as no listeners in vc`, this.guildId);
+        }
+        this.registerGuildPlayerEventListeners();
+        this.voiceConnection.subscribe(this.player);
+        logger.debug(`Created music player`, this.guildId);
+    }
+
+    private registerGuildPlayerEventListeners() {
+        this.voiceConnection.addListener(VoiceConnectionStatus.Disconnected, () => {
+            logger.debug(`Voice disconnected`, this.guildId);
+            this.removeGuildPlayer('Disconnected');
+        });
+        this.player.addListener('error', async (e: any) => {
+            if (e.message === 'Status code: 403' && this.currentlyPlaying && this.replayRetries < 5) {
+                await timer(100 * this.replayRetries);
+                this.queue?.unshift(this.currentlyPlaying!);
+                this.replayRetries++;
+                logger.debug(
+                    `Error occurred in music player while attempting to play '${this.currentlyPlaying.title}' playing retrying.. ${this.replayRetries} retries`,
+                    this.guildId,
+                );
+            } else {
+                logger.error(
+                    `Error occurred in music player while attempting to play '${this.currentlyPlaying?.title ?? ''}' : ${e.message}`,
+                    this.guildId,
+                );
+            }
+            this.player.stop();
+            this.playNext();
+        });
+        this.player.addListener(AudioPlayerStatus.Idle, () => {
+            if (this.queue.length <= 0) {
+                this.botLeaveTimeout = setTimeout(() => {
+                    this.removeGuildPlayer('finished playing music');
+                }, 600000);
+                logger.debug(`Added Timeout for bot to leave as queue empty`, this.guildId);
+                return;
+            }
+            logger.debug(`finished playing ${this.currentlyPlaying!.title}`, this.guildId);
+            this.pushTracksIntoHistoryQueue([this.currentlyPlaying!]);
+            this.playNext();
+        });
+        this.player.addListener(AudioPlayerStatus.Playing, async (oldState: any) => {
+            this.replayRetries = 0;
+            if (oldState.status === AudioPlayerStatus.AutoPaused || oldState.status === AudioPlayerStatus.Paused) return;
+            this.textChannel.send(
+                `Now Playing ${this.currentlyPlaying!.title}, \`[${
+                    this.currentlyPlaying!.isLiveStream ? 'LIVE 🔴' : secondsToTime(this.currentlyPlaying!.length)
+                }]\``,
+            );
+        });
+    }
+
+    private async getAudioStream(info: IBasicVideoInfo) {
+        switch (info.type) {
+            case VideoInfoType.YouTube:
+                return await getYoutubeAudioStream(info.url);
+            case VideoInfoType.SoundCloud:
+                return await getSoundCloudAudioStream(info.url);
+            case VideoInfoType.Mixlr:
+                return await getMixlrAudioStream(info.url);
+        }
+        return [null, null] as GetAudioStreamResult;
+    }
+
+    private async searchByQueryString(param: string) {
+        const newMessage = await this.textChannel.send(`Searching for '${param}'`);
+        const urls = await getYoutubeSearchResult(param);
+        newMessage.delete();
+        return urls;
+    }
+
+    private pushTracksIntoQueue(tracks: IBasicVideoInfo[]) {
+        if (tracks.length + this.queue.length <= MaxQueueSize) this.queue.push(...tracks);
+        else throw new Error('failed to add tracks to queue');
+        return true;
+    }
+
+    private pushTracksIntoHistoryQueue(tracks: IBasicVideoInfo[]) {
+        if (tracks.length + this.queueHistory.length <= MaxQueueHistorySize) this.queueHistory.push(...tracks);
+        else {
+            tracks.forEach(() => this.queueHistory.shift());
+            this.pushTracksIntoHistoryQueue(tracks);
+        }
+    }
+
+    private async parsePlayParameter(param: string) {
+        const urlRegexResult = isValidURL(param);
+        if (!urlRegexResult) return await this.searchByQueryString(param);
+        switch (urlRegexResult[4].toLowerCase()) {
+            case 'youtube':
+                return await parseYouTubePlayParameter(param);
+            case 'soundcloud':
+                return await parseSoundCloudPlayParameter(param);
+            case 'mixlr':
+                return await parseMixlrPlayParameter(param);
+            default:
+                this.textChannel.send(`${urlRegexResult[2]} is not supported currently`);
+        }
+    }
+
+    private async playNext() {
+        if (this.queue.length <= 0) return;
+        const audioToPlay = this.queue.shift();
+        logger.debug(`Preparing to play ${audioToPlay?.title}`, this.guildId);
+        this.currentlyPlaying = audioToPlay!;
+        const stream = await this.getAudioStream(audioToPlay!);
+        if (stream[0]) {
+            // // const filestream = stream[0].pipe(fs.createWriteStream(path.join(__dirname, `${message.guildId}.mp3`)));
+            // const file = fs.createReadStream(path.join(__dirname, `${message.guildId}.mp3`));
+            const resource = createAudioResource(stream[0], {inputType: StreamType.Arbitrary});
+            this.player.play(resource);
+            logger.debug(`Now playing... ${audioToPlay!.title}`, this.guildId);
             return;
         }
-        logger.debug(`finished playing ${guildPlayer.currentlyPlaying!.title}`, guildPlayer.guild.id);
-        pushTracksIntoHistoryQueue(guildPlayer, [guildPlayer.currentlyPlaying!]);
-        playNext(guildPlayer.voiceConnection, guildPlayer.playerMessages.get('latestToQueue')!);
-    });
-    guildPlayer.player.addListener(AudioPlayerStatus.Playing, async (oldState) => {
-        guildPlayer.replayRetries = 0;
-        if (oldState.status === AudioPlayerStatus.AutoPaused || oldState.status === AudioPlayerStatus.Paused) return;
-        const newPlayingMessage = `Now Playing ${guildPlayer.currentlyPlaying!.title}, \`[${
-            guildPlayer.currentlyPlaying!.isLiveStream ? 'LIVE 🔴' : secondsToTime(guildPlayer.currentlyPlaying!.length)
-        }]\``;
-        guildPlayer.playerMessages.set('playRequest', await guildPlayer.playerMessages.get('latestToQueue')!.channel.send(newPlayingMessage));
-    });
-}
-
-async function getAudioStream(info: IBasicVideoInfo) {
-    switch (info.type) {
-        case VideoInfoType.YouTube:
-            return await getYoutubeAudioStream(info.url);
-        case VideoInfoType.SoundCloud:
-            return await getSoundCloudAudioStream(info.url);
-        case VideoInfoType.Mixlr:
-            return await getMixlrAudioStream(info.url);
+        this.textChannel.send(`${stream[1]} for ${audioToPlay!.title}`);
+        this.playNext();
     }
-    return [null, null] as GetAudioStreamResult;
-}
 
-async function playNext(voiceConnection: VoiceConnection, message: Message) {
-    const guildPlayer = guildPlayers[message.guildId!];
-    if (guildPlayer.queue.length <= 0) return;
-    const audioToPlay = guildPlayer.queue.shift();
-    logger.debug(`Preparing to play ${audioToPlay?.title}`, guildPlayer.guild.id);
-    guildPlayer.currentlyPlaying = audioToPlay!;
-    const stream = await getAudioStream(audioToPlay!);
-    if (stream[0]) {
-        // // const filestream = stream[0].pipe(fs.createWriteStream(path.join(__dirname, `${message.guildId}.mp3`)));
-        // const file = fs.createReadStream(path.join(__dirname, `${message.guildId}.mp3`));
-        const resource = createAudioResource(stream[0], {inputType: StreamType.Arbitrary});
-        guildPlayer.player.play(resource);
+    clearBotLeaveTimeout() {
+        if (!this.botLeaveTimeout) return;
+        clearTimeout(this.botLeaveTimeout!);
+        this.botLeaveTimeout = null;
+    }
 
-        logger.debug(`Now playing... ${audioToPlay!.title}`, guildPlayer.guild.id);
-        return;
+    removeGuildPlayer(reason: string) {
+        logger.debug(`Removing music player: ${reason}`, this.guildId);
+        this.clearBotLeaveTimeout();
+        this.player.removeAllListeners(AudioPlayerStatus.Idle);
+        this.player.removeAllListeners(AudioPlayerStatus.Playing);
+        this.player.removeAllListeners('error');
+        this.voiceConnection.removeAllListeners(VoiceConnectionStatus.Disconnected);
+        if (this.voiceChannelMembers.has(client.user!.id)) this.voiceConnection.destroy();
+        this.events.emit('disposed');
+        logger.debug(`Removed music player ${reason}`, this.guildId);
     }
-    message.react('⛔');
-    message.channel.send(`${stream[1]} for ${audioToPlay!.title}`);
-    playNext(voiceConnection, message);
-}
 
-async function searchByQueryString(param: string, message: Message) {
-    const newMessage = await message.channel.send(`Searching for '${param}'`);
-    const urls = await getYoutubeSearchResult(param);
-    newMessage.delete();
-    return urls;
-}
-
-function pushTracksIntoQueue(guildPlayer: IGuildMusicPlayer, tracks: IBasicVideoInfo[]) {
-    if (tracks.length + guildPlayer.queue.length <= MaxQueueSize) guildPlayer.queue.push(...tracks);
-    else return false;
-    return true;
-}
-
-function pushTracksIntoHistoryQueue(guildPlayer: IGuildMusicPlayer, tracks: IBasicVideoInfo[]) {
-    if (tracks.length + guildPlayer.queueHistory.length <= MaxQueueHistorySize) guildPlayer.queueHistory.push(...tracks);
-    else {
-        tracks.forEach(() => guildPlayer.queueHistory.shift());
-        pushTracksIntoHistoryQueue(guildPlayer, tracks);
-    }
-}
-
-async function parsePlayParameter(param: string, message: Message) {
-    const urlRegexResult = isValidURL(param);
-    if (!urlRegexResult) return await searchByQueryString(param, message);
-    switch (urlRegexResult[4].toLowerCase()) {
-        case 'youtube':
-            return await parseYouTubePlayParameter(param);
-        case 'soundcloud':
-            return await parseSoundCloudPlayParameter(param);
-        case 'mixlr':
-            return await parseMixlrPlayParameter(param);
-        default:
-            message.channel.send(`${urlRegexResult[2]} is not supported currently`);
-    }
-}
-
-export function play(message: Message, param: string) {
-    const guildPlayer = guildPlayers[message.guildId!];
-    let searchResults;
-    if (guildPlayer) {
-        searchResults = guildPlayer.playSearch ? [...guildPlayer.playSearch] : null;
-        guildPlayer.playSearch = null;
-        clearBotLeaveTimeout(guildPlayer);
-        logger.debug(`Play Dispatcher cleared leave timeout`, guildPlayer.guild.id);
-    }
-    if (!param && guildPlayer && guildPlayer.player.state.status === AudioPlayerStatus.Paused) {
-        guildPlayer.player.unpause();
-        message.channel.send(`Resumed ${guildPlayer.currentlyPlaying!.title}`);
-        logger.debug(`Un-paused music player ${guildPlayer.currentlyPlaying!.title}`, guildPlayer.guild.id);
-        return true;
-    }
-    if (isNaN(+param)) {
-        addToQueue(param, message);
-        logger.debug(`Added '${param}' for youtube string search`, message.guildId!);
-        return true;
-    }
-    if (+param && searchResults && +param <= searchResults.length) {
-        addToQueue(searchResults[+param - 1].url, message);
-        logger.debug(`Selected song number '${param}' from search results`, guildPlayer.guild.id);
-        return true;
-    }
-    if (guildPlayer && param != '' && +param <= guildPlayer.queue.length + 1) {
-        logger.debug(`Selected song number '${param}' from queue`, guildPlayer.guild.id);
-        const songPointer = +param - 2;
-        if (songPointer === -1 && guildPlayer.currentlyPlaying) {
-            guildPlayer.queue.unshift(guildPlayer.currentlyPlaying);
+    async addToQueue(param: string) {
+        const urls = await this.parsePlayParameter(param);
+        if (!urls) {
+            throw new Error('Unable to find ' + param);
         } else {
-            const targetSong = guildPlayer.queue[songPointer];
-            guildPlayer.queue = guildPlayer.queue.filter((x, index) => index != songPointer);
-            guildPlayer.queue.unshift(targetSong);
-        }
-        playNext(guildPlayer.voiceConnection, message);
-        return true;
-    }
-    message.channel.send(`Song number '${param}' is not valid`);
-    return false;
-}
-
-export async function search(message: Message, param: string) {
-    if (!guildPlayers[message.guildId!]) createNewGuildPlayer(message);
-    const guildPlayer = guildPlayers[message.guildId!];
-    logger.debug(`Searching using ps command with '${param}' as search query`, guildPlayer.guild.id);
-    const newMessage = await message.channel.send(`Searching for '${param}'`);
-    guildPlayer.playSearch = await getYoutubeSearchResultInfo(param);
-    newMessage.delete();
-    if (!guildPlayer.playSearch) {
-        message.channel.send(`Unable to get search results for '${param}'`);
-    }
-    let msg = '**Please select a track with the -p 1-5 command**\n';
-    guildPlayer.playSearch!.forEach((x, i) => (msg += `**#${i + 1}** ${x.title} \`[${x.isLiveStream ? 'LIVE 🔴' : secondsToTime(x.length)}]\`\n`));
-    message.channel.send(msg);
-    return true;
-}
-
-export async function addToQueue(param: string, message: Message) {
-    let guildPlayer = guildPlayers[message.guildId!];
-    const urls = await parsePlayParameter(param, message);
-    if (!urls) {
-        message.channel.send('Unable to find ' + param);
-        return false;
-    }
-    if (!guildPlayer) guildPlayer = createNewGuildPlayer(message, [...urls]);
-    else {
-        if (!pushTracksIntoQueue(guildPlayer, urls)) {
-            message.channel.send('Reached maximum queue size');
-            logger.error('Reached maximum queue size', guildPlayer.guild.id);
-            return false;
-        }
-    }
-    logger.debug(`AddToQueue called with '${param}' as parameter`, guildPlayer.guild.id);
-    guildPlayer.playerMessages.set('latestToQueue', message);
-    if (urls.length > 1) message.channel.send(`Added playlist of ${urls.length} songs to the queue`);
-    else
-        guildPlayer.playerMessages.set(
-            'addedTrack',
-            await message.channel.send(`Added ${urls[0].title} queue \`[${urls[0].isLiveStream ? 'LIVE 🔴' : secondsToTime(urls[0].length)}]\``),
-        );
-    if (guildPlayer.player.state.status === AudioPlayerStatus.Idle) playNext(guildPlayer.voiceConnection, message);
-    return true;
-}
-
-export function voiceChannelChange(oldState: VoiceState, newState: VoiceState) {
-    const oldChannelId = oldState.channelId;
-    const newChannelId = newState.channelId;
-    const oldGuildPlayer = guildPlayers[oldState.guild.id];
-    const newGuildPlayer = guildPlayers[newState.guild.id];
-    if (oldChannelId === newChannelId) return;
-    if (oldChannelId && oldGuildPlayer) {
-        const voiceChannelMemberMap = oldGuildPlayer.voiceChannelMembers;
-        if (voiceChannelMemberMap.has(oldState.member!.id)) {
-            voiceChannelMemberMap.delete(oldState.member!.id);
-            if (voiceChannelMemberMap.size === 1) {
-                oldGuildPlayer.textChannel.send('All members left voice channel. Player paused.');
-                oldGuildPlayer.player.pause();
-                oldGuildPlayer.botLeaveTimeout = setTimeout(() => {
-                    removeGuildPlayer(oldGuildPlayer, 'users left');
-                }, 60000);
-                logger.debug(`Added Timeout for bot to leave as no members left in voice channel`, oldGuildPlayer.guild.id);
+            if (!this.pushTracksIntoQueue(urls)) {
+                logger.error('Reached maximum queue size', this.guildId);
+                throw new Error('Reached maximum queue size');
             }
         }
+        logger.debug(`AddToQueue called with '${param}' as parameter`, this.guildId);
+        if (urls.length > 1) this.textChannel.send(`Added playlist of ${urls.length} songs to the queue`);
+        else this.textChannel.send(`Added ${urls[0].title} queue \`[${urls[0].isLiveStream ? 'LIVE 🔴' : secondsToTime(urls[0].length)}]\``);
+        if (this.player.state.status === AudioPlayerStatus.Idle) this.playNext();
     }
-    if (newChannelId && newGuildPlayer) {
-        newGuildPlayer.voiceChannelMembers.set(newState.member!.id, newState.member!);
-        if (
-            newGuildPlayer.voiceChannelMembers.size === 2 &&
-            oldGuildPlayer.botLeaveTimeout &&
-            newGuildPlayer.player.state.status === AudioPlayerStatus.Paused
-        ) {
-            clearBotLeaveTimeout(oldGuildPlayer);
-            logger.debug(`Removed timeout as member rejoined vc`, newGuildPlayer.guild.id);
-            newGuildPlayer.player.unpause();
+
+    stop() {
+        if (this.player.state.status !== AudioPlayerStatus.Playing) {
+            throw new Error('I am not currently playing any music');
         }
+        this.queue = [];
+        this.player.stop();
     }
-}
 
-export function stop(message: Message) {
-    const guildPlayer = guildPlayers[message.guildId!];
-    if (!guildPlayer || guildPlayer.player.state.status !== AudioPlayerStatus.Playing) {
-        message.channel.send('I am not currently playing any music');
-        return false;
-    }
-    guildPlayer.queue = [];
-    guildPlayer.player.stop();
-    return true;
-}
-
-export function shuffle(message: Message) {
-    const guildPlayer = guildPlayers[message.guildId!];
-    if (!guildPlayer || guildPlayer.queue.length === 0) {
-        message.channel.send('The queue is empty');
-        return false;
-    }
-    shuffleArray(guildPlayer.queue);
-    return true;
-}
-
-export function skip(message: Message) {
-    const guildPlayer = guildPlayers[message.guildId!];
-    if (!guildPlayer || guildPlayer.player.state.status !== AudioPlayerStatus.Playing) {
-        message.channel.send('I am not currently playing any music');
-        return false;
-    }
-    guildPlayer.player.stop();
-    return true;
-}
-
-export function clear(message: Message) {
-    const guildPlayer = guildPlayers[message.guildId!];
-    if (!guildPlayer || guildPlayer.queue.length == 0) {
-        message.channel.send('The queue is empty');
-        return false;
-    }
-    guildPlayer.queue = [];
-    return true;
-}
-
-export function previousTrack(message: Message) {
-    const guildPlayer = guildPlayers[message.guildId!];
-    if (!guildPlayer || guildPlayer.queueHistory.length === 0) {
-        message.channel.send('No previous track found');
-        return false;
-    }
-    const previousTrack = guildPlayer.queueHistory.pop();
-    guildPlayer.queue.unshift(previousTrack!);
-    guildPlayer.player.stop();
-    return true;
-}
-
-export function getQueue(param: string, message: Message) {
-    const guildPlayer = guildPlayers[message.guildId!];
-    if (!guildPlayer || (guildPlayer.queue.length <= 0 && !guildPlayer.currentlyPlaying)) {
-        message.channel.send('The queue is empty');
-        return false;
-    }
-    let msg = `►**#1** ${guildPlayer.currentlyPlaying?.title} \`[${
-        guildPlayer.currentlyPlaying?.isLiveStream ? 'LIVE 🔴' : secondsToTime(guildPlayer.currentlyPlaying!.length)
-    }]\`\n`;
-    if (!param) {
-        guildPlayer.queue
-            .slice(0, 5)
-            .forEach((x, i) => (msg += `**#${i + 2}** ${x.title} \`[${x.isLiveStream ? 'LIVE 🔴' : secondsToTime(x.length)}]\`\n`));
-        message.channel.send(msg);
-        return true;
-    }
-    if (isNaN(+param)) {
-        message.channel.send('Please enter number of queue entries to view');
-        return false;
-    }
-    const queueSlice = guildPlayer.queue.slice(0, +param);
-    let i = 2;
-    for (const x of queueSlice) {
-        if (msg.length > 3500) {
-            return false;
+    shuffle() {
+        if (this.queue.length === 0) {
+            throw new Error('The queue is empty');
         }
-        msg += `**#${i}** ${x.title} \`[${x.isLiveStream ? 'LIVE 🔴' : secondsToTime(x.length)}]\`\n`;
-        i++;
+        shuffleArray(this.queue);
     }
-    message.channel.send(msg);
-    return true;
-}
 
-export async function bbpm(message: Message) {
-    return await addToQueue('https://api.mixlr.com/v3/channel_view/thebbpm', message);
-}
-
-export function getNowPlaying(message: Message) {
-    const currentlyPlaying = guildPlayers[message.guildId!].currentlyPlaying;
-    if (!currentlyPlaying) {
-        message.channel.send('I am not currently playing any music');
-        return false;
+    skip() {
+        if (this.player.state.status !== AudioPlayerStatus.Playing) {
+            throw new Error('I am not currently playing any music');
+        }
+        this.player.stop();
     }
-    message.channel.send(`${currentlyPlaying.title} \`[${currentlyPlaying.isLiveStream ? 'LIVE 🔴' : secondsToTime(currentlyPlaying.length)}]\`\n`);
-    return true;
-}
 
-export function pause(message: Message) {
-    const guildPlayer = guildPlayers[message.guildId!];
-    if (guildPlayer.player.state.status === AudioPlayerStatus.Playing) {
-        guildPlayer.player.pause();
-        message.channel.send(`paused ${guildPlayer.currentlyPlaying!.title}`);
+    clear() {
+        if (this.queue.length == 0) {
+            throw new Error('The queue is empty');
+        }
+        this.queue = [];
     }
-    return true;
-}
 
-export function leave(message: Message) {
-    removeGuildPlayer(guildPlayers[message.guildId!], 'leave command');
-    message.react('👋');
-    return true;
+    previousTrack() {
+        if (this.queueHistory.length === 0) {
+            throw new Error('No previous track found');
+        }
+        const previousTrack = this.queueHistory.pop();
+        this.queue.unshift(previousTrack!);
+        this.player.stop();
+    }
+
+    getQueue(param?: string) {
+        if (this.queue.length <= 0 && !this.currentlyPlaying) {
+            throw new Error('The queue is empty');
+        }
+        let msg = `►**#1** ${this.currentlyPlaying?.title} \`[${
+            this.currentlyPlaying?.isLiveStream ? 'LIVE 🔴' : secondsToTime(this.currentlyPlaying!.length)
+        }]\`\n`;
+        if (!param) {
+            this.queue
+                .slice(0, 5)
+                .forEach((x, i) => (msg += `**#${i + 2}** ${x.title} \`[${x.isLiveStream ? 'LIVE 🔴' : secondsToTime(x.length)}]\`\n`));
+            return msg;
+        }
+        if (isNaN(+param)) {
+            throw new Error('Please enter number of queue entries to view');
+        }
+        const queueSlice = this.queue.slice(0, +param);
+        let i = 2;
+        for (const x of queueSlice) {
+            if (msg.length > 3500) {
+                return false;
+            }
+            msg += `**#${i}** ${x.title} \`[${x.isLiveStream ? 'LIVE 🔴' : secondsToTime(x.length)}]\`\n`;
+            i++;
+        }
+        return msg;
+    }
+
+    getNowPlaying() {
+        const currentlyPlaying = this.currentlyPlaying;
+        if (!currentlyPlaying) {
+            throw new Error('I am not currently playing any music');
+        }
+        return `${currentlyPlaying.title} \`[${currentlyPlaying.isLiveStream ? 'LIVE 🔴' : secondsToTime(currentlyPlaying.length)}]\`\n`;
+    }
+
+    pause() {
+        if (this.player.state.status === AudioPlayerStatus.Playing) {
+            this.player.pause();
+            return;
+        }
+        throw new Error('I am not currently playing any music');
+    }
 }

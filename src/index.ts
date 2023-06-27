@@ -1,9 +1,9 @@
 import {Client, Intents} from 'discord.js';
 import {config} from 'dotenv';
 import {musicPlayerDispatcher} from './MusicPlayer/dispatcher';
-import {logger} from './services/logger.js';
+import {logger} from './services/logger';
 import {RateLimiter} from './lib/RateLimiter';
-import {voiceChannelChange} from './MusicPlayer/MusicPlayer';
+import {MusicPlayerManager} from './MusicPlayer/MusicPlayerManager';
 
 config();
 
@@ -25,7 +25,7 @@ client.on('messageCreate', (message) => {
     }
 });
 
-client.on('voiceStateUpdate', voiceChannelChange);
+client.on('voiceStateUpdate', MusicPlayerManager.voiceChannelChange);
 
 client.login(process.env.TOKEN).then(() => {
     console.log('logged in successfully');
