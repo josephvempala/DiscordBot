@@ -5,4 +5,5 @@ dist
 .dockerfile
 .dockerignore
 .gitignore
+.vscode
 nohup.out

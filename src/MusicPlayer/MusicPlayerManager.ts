@@ -43,7 +43,7 @@ export class MusicPlayerManager {
             }
             message.channel.send(`Song number '${param}' is not valid`);
         } catch (e: any) {
-            message.channel.send(e);
+            message.channel.send(e.message);
         }
     }
 
@@ -64,14 +64,12 @@ export class MusicPlayerManager {
     // }
 
     static voiceChannelChange(oldState: VoiceState, newState: VoiceState) {
-        console.log('working');
-
         const oldChannelId = oldState.channelId;
         const newChannelId = newState.channelId;
-        const oldGuildPlayer = MusicPlayerManager.activeGuilds.get(oldChannelId!);
-        const newGuildPlayer = MusicPlayerManager.activeGuilds.get(newChannelId!);
+        const oldGuildPlayer = MusicPlayerManager.activeGuilds.get(oldState.guild.id);
+        const newGuildPlayer = MusicPlayerManager.activeGuilds.get(newState.guild.id);
         if (oldChannelId === newChannelId) return;
-        if (oldGuildPlayer) {
+        if (oldChannelId && oldGuildPlayer) {
             const voiceChannelMemberMap = oldGuildPlayer.voiceChannelMembers;
             if (voiceChannelMemberMap.has(oldState.member!.id)) {
                 voiceChannelMemberMap.delete(oldState.member!.id);
@@ -85,11 +83,11 @@ export class MusicPlayerManager {
                 }
             }
         }
-        if (newGuildPlayer) {
+        if (newChannelId && newGuildPlayer) {
             newGuildPlayer.voiceChannelMembers.set(newState.member!.id, newState.member!);
             if (newGuildPlayer.voiceChannelMembers.size === 2 && newGuildPlayer.player.state.status === AudioPlayerStatus.Paused) {
-                logger.debug(`Removed timeout as member rejoined vc`, newGuildPlayer.guildId);
                 newGuildPlayer.clearBotLeaveTimeout();
+                logger.debug(`Removed timeout as member rejoined vc`, newGuildPlayer.guildId);
                 newGuildPlayer.player.unpause();
             }
         }
