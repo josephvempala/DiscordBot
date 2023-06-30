@@ -44,6 +44,7 @@ export class MusicPlayerManager {
             message.channel.send(`Song number '${param}' is not valid`);
         } catch (e: any) {
             message.channel.send(e.message);
+            logger.error(e.message, message.guildId!);
         }
     }
 
@@ -100,6 +101,7 @@ export class MusicPlayerManager {
             message.react('👋');
         } catch (e: any) {
             message.reply(e.message);
+            logger.error(e.message, message.guildId!);
         }
     }
 
@@ -109,6 +111,7 @@ export class MusicPlayerManager {
             newGuildPlayer?.player.stop();
         } catch (e: any) {
             message.reply(e.message);
+            logger.error(e.message, message.guildId!);
         }
     }
 
@@ -118,6 +121,7 @@ export class MusicPlayerManager {
             newGuildPlayer?.shuffle();
         } catch (e: any) {
             message.reply(e.message);
+            logger.error(e.message, message.guildId!);
         }
     }
 
@@ -127,6 +131,7 @@ export class MusicPlayerManager {
             newGuildPlayer?.skip();
         } catch (e: any) {
             message.reply(e.message);
+            logger.error(e.message, message.guildId!);
         }
     }
 
@@ -136,6 +141,7 @@ export class MusicPlayerManager {
             newGuildPlayer?.clear();
         } catch (e: any) {
             message.reply(e.message);
+            logger.error(e.message, message.guildId!);
         }
     }
 
@@ -145,6 +151,7 @@ export class MusicPlayerManager {
             newGuildPlayer?.previousTrack();
         } catch (e: any) {
             message.reply(e.message);
+            logger.error(e.message, message.guildId!);
         }
     }
 
@@ -154,6 +161,7 @@ export class MusicPlayerManager {
             newGuildPlayer?.getQueue(param);
         } catch (e: any) {
             message.reply(e.message);
+            logger.error(e.message, message.guildId!);
         }
     }
 
@@ -162,6 +170,7 @@ export class MusicPlayerManager {
             return await MusicPlayerManager.play(message, 'https://api.mixlr.com/v3/channel_view/thebbpm');
         } catch (e: any) {
             message.reply(e.message);
+            logger.error(e.message, message.guildId!);
         }
     }
 
@@ -171,6 +180,7 @@ export class MusicPlayerManager {
             newGuildPlayer?.getNowPlaying();
         } catch (e: any) {
             message.reply(e.message);
+            logger.error(e.message, message.guildId!);
         }
     }
 
@@ -180,6 +190,7 @@ export class MusicPlayerManager {
             newGuildPlayer?.pause();
         } catch (e: any) {
             message.reply(e.message);
+            logger.error(e.message, message.guildId!);
         }
     }
 }
