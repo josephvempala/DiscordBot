@@ -60,12 +60,6 @@ export class GuildPlayer {
         message.member!.voice.channel!.members!.forEach((x) => {
             this.voiceChannelMembers.set(x.id, x);
         });
-        if (this.voiceChannelMembers.size < 1) {
-            this.botLeaveTimeout = setTimeout(() => {
-                this.removeGuildPlayer('Users Left channel');
-            }, 600000);
-            logger.debug(`Added Timeout for bot to leave as no listeners in vc`, this.guildId);
-        }
         this.registerGuildPlayerEventListeners();
         this.voiceConnection.subscribe(this.player);
         logger.debug(`Created music player`, this.guildId);
@@ -196,7 +190,7 @@ export class GuildPlayer {
         this.player.removeAllListeners(AudioPlayerStatus.Playing);
         this.player.removeAllListeners('error');
         this.voiceConnection.removeAllListeners(VoiceConnectionStatus.Disconnected);
-        if (this.voiceChannelMembers.has(client.user!.id)) this.voiceConnection.destroy();
+        if (this.voiceConnection.state.status !== VoiceConnectionStatus.Destroyed) this.voiceConnection.destroy();
         this.events.emit('disposed');
         logger.debug(`Removed music player ${reason}`, this.guildId);
     }
