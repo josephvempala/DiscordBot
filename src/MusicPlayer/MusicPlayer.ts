@@ -92,7 +92,7 @@ export class GuildPlayer {
             if (this.queue.length <= 0) {
                 this.botLeaveTimeout = setTimeout(() => {
                     this.removeGuildPlayer('finished playing music');
-                }, 600000);
+                }, 60000);
                 logger.debug(`Added Timeout for bot to leave as queue empty`, this.guildId);
                 return;
             }
