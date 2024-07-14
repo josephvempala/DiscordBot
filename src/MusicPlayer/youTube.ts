@@ -1,12 +1,10 @@
 import {Readable} from 'node:stream';
-import {default as ytdl, chooseFormat, downloadFromInfo, getBasicInfo, getInfo} from 'ytdl-core';
+import {default as ytdl, chooseFormat, downloadFromInfo, getBasicInfo, getInfo} from '@distube/ytdl-core';
 import ytpl from 'ytpl';
-import ytsr from '@yimura/scraper';
+import ytsr from '@distube/ytsr';
 import {IBasicVideoInfo, VideoInfoType} from '../Interfaces/IBasicVideoInfo';
 import {GetAudioStreamResult} from '../Interfaces/GetAudioStreamResult';
 import {cacheStream, getCachedStream} from '../services/filecache';
-
-const search = new ytsr.Scraper();
 
 export async function getYoutubeAudioStream(url: string): Promise<GetAudioStreamResult> {
 	try {
@@ -97,21 +95,26 @@ export async function parseYouTubePlayParameter(param: string): Promise<IBasicVi
 //     return null;
 // }
 
-export async function getYoutubeSearchResult(param: string): Promise<IBasicVideoInfo[] | null> {
+export async function getYoutubeSearchResult(param: string, limit: number): Promise<IBasicVideoInfo[] | null> {
 	try {
+		const result = (
+			await ytsr(param, {
+				safeSearch: false,
+				limit,
+			})
+		).items[0];
 		return [
-			(
-				await search.search(param, {
-					language: 'en-GB',
-					searchType: 'VIDEO',
-				})
-			).videos.map((x) => ({
-				url: x.link,
-				title: x.title,
-				length: x.duration,
+			{
+				url: result.url,
+				title: result.name,
+				length: result.duration
+					?.split(':')
+					.map((x) => +x)
+					.reverse()
+					.reduce((x, y, z) => x + y * (z * 60)),
 				type: VideoInfoType.YouTube,
-				isLiveStream: false,
-			}))[0],
+				isLiveStream: result.isLive,
+			},
 		];
 	} catch (e: any) {
 		console.log(e);
