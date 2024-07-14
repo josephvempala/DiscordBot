@@ -24,7 +24,6 @@
 		"readable-stream-clone": "^0.0.7",
 		"soundcloud-downloader": "^1.0.0",
 		"tweetnacl": "^1.0.3",
-		"ytdl-core": "git+ssh://git@github.com:khlevon/node-ytdl-core.git#v4.11.4-patch.2",
 		"ytpl": "^2.2.3"
 	},
 	"devDependencies": {
