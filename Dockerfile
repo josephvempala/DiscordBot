@@ -1,4 +1,4 @@
-FROM node:16-alpine as builder
+FROM node:21-alpine as builder
 WORKDIR /app
 COPY . .
 RUN apk update
@@ -8,7 +8,7 @@ ENV NODE_ENV=PRODUCTION
 RUN npm i
 RUN npm run build 
 
-FROM node:16-alpine
+FROM node:21-alpine
 WORKDIR /app
 COPY --from=builder /app/dist .
 COPY --from=builder /app/node_modules ./node_modules

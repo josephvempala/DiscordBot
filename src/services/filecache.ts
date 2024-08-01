@@ -7,6 +7,8 @@ import path from 'path';
 
 export function cacheStream(stream: Readable, key: string) {
 	try {
+		const tempDir = process.env.TMP_DIR;
+		if (!tempDir || tempDir === '') return stream;
 		const writeStream = createWriteStream(path.join(os.tmpdir(), encodeURIComponent(key) + '.mp3'));
 		stream.pipe(writeStream);
 		const playerStream = new ReadableStreamClone(stream);
