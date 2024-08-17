@@ -5,7 +5,8 @@ import ytsr from '@distube/ytsr';
 import {IBasicVideoInfo, VideoInfoType} from '../Interfaces/IBasicVideoInfo';
 import {GetAudioStreamResult} from '../Interfaces/GetAudioStreamResult';
 import {cacheStream, getCachedStream} from '../services/filecache';
-import {spawn} from 'child_process';
+import {exec, spawn} from 'child_process';
+import {join} from 'path';
 import * as fs from 'fs';
 
 import {arch} from 'os';
@@ -23,14 +24,18 @@ export function initialize() {
 					if (process.platform !== 'linux') {
 						throw Error('Unsupported platform');
 					} else {
-						if (fs.existsSync('ytdlp')) {
-							ytdlpPath = 'ytdlp';
+						const binaryPath = join(__dirname, 'ytdlp');
+						if (fs.existsSync(binaryPath)) {
+							fs.chmodSync(binaryPath, 0o755);
+							ytdlpPath = binaryPath;
+							console.log('ytdlp found');
 							resolve();
 							return;
 						}
 						return new Promise<void>((res, reject) => {
-							downloadFile('https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux_aarch64', 'ytdlp').then(() => {
-								ytdlpPath = 'ytdlp';
+							downloadFile('https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux_aarch64', binaryPath).then(() => {
+								ytdlpPath = binaryPath;
+								console.log('ytdlp downloaded');
 								res();
 							});
 						});
@@ -49,15 +54,20 @@ export function initialize() {
 							});
 						});
 					} else if (process.platform === 'linux') {
-						if (fs.existsSync('ytdlp')) {
-							ytdlpPath = 'ytdlp';
+						const binaryPath = join(__dirname, 'ytdlp');
+						if (fs.existsSync(binaryPath)) {
+							fs.chmodSync(binaryPath, 0o755);
+							ytdlpPath = binaryPath;
+							console.log('ytdlp found');
 							resolve();
 							return;
 						}
 						return new Promise<void>((res, reject) => {
-							downloadFile('https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux', 'ytdlp').then(() => {
-								ytdlpPath = 'ytdlp';
+							downloadFile('https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux', binaryPath).then(() => {
+								ytdlpPath = join(__dirname, 'ytdlp');
+								console.log('ytdlp downloaded');
 								res();
+								return;
 							});
 						});
 					} else {
@@ -74,7 +84,13 @@ export function initialize() {
 
 function getYtdlpStream(ytId: string): Readable | null {
 	if (!ytdlpPath) return null;
-	return spawn(ytdlpPath, ['--buffer-size', '16k', '-f', 'ba*', '-o', '-', ytId], {shell: true}).stdout;
+	const ytdlp = spawn(ytdlpPath, ['--buffer-size', '16k', '-f', 'ba*', '-x', '--audio-format', 'opus', '--audio-quality', '0', '-o', '-', ytId], {
+		shell: true,
+	});
+	ytdlp.stderr.on('data', (data) => {
+		console.error(data.toString());
+	});
+	return ytdlp.stdout;
 }
 
 export async function getYoutubeAudioStream(url: string): Promise<GetAudioStreamResult> {
