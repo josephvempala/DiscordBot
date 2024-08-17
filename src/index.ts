@@ -4,8 +4,10 @@ import {musicPlayerDispatcher} from './MusicPlayer/dispatcher';
 import {logger} from './services/logger';
 import {RateLimiter} from './lib/RateLimiter';
 import {MusicPlayerManager} from './MusicPlayer/MusicPlayerManager';
+import {initialize} from './MusicPlayer/youTube';
 
 config();
+initialize();
 
 export const client = new Client({intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.GUILD_MESSAGES, Intents.FLAGS.GUILD_VOICE_STATES]});
 

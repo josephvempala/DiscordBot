@@ -1,24 +1,91 @@
 import {Readable} from 'node:stream';
-import {default as ytdl, chooseFormat, downloadFromInfo, getBasicInfo, getInfo} from '@distube/ytdl-core';
+import {getBasicInfo, getInfo} from '@distube/ytdl-core';
 import ytpl from 'ytpl';
 import ytsr from '@distube/ytsr';
 import {IBasicVideoInfo, VideoInfoType} from '../Interfaces/IBasicVideoInfo';
 import {GetAudioStreamResult} from '../Interfaces/GetAudioStreamResult';
 import {cacheStream, getCachedStream} from '../services/filecache';
+import {spawn} from 'child_process';
+import * as fs from 'fs';
+
+import {arch} from 'os';
+import {downloadFile} from '../lib/util';
+
+const system = arch();
+let ytdlpPath = '';
+
+export function initialize() {
+	return new Promise<void>((resolve, reject) => {
+		if (ytdlpPath) return resolve();
+		try {
+			switch (system) {
+				case 'aarch64':
+					if (process.platform !== 'linux') {
+						throw Error('Unsupported platform');
+					} else {
+						if (fs.existsSync('ytdlp')) {
+							ytdlpPath = 'ytdlp';
+							resolve();
+							return;
+						}
+						return new Promise<void>((res, reject) => {
+							downloadFile('https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux_aarch64', 'ytdlp').then(() => {
+								ytdlpPath = 'ytdlp';
+								res();
+							});
+						});
+					}
+				case 'x64':
+					if (process.platform === 'win32') {
+						if (fs.existsSync('ytdlp.exe')) {
+							ytdlpPath = 'ytdlp.exe';
+							resolve();
+							return;
+						}
+						return new Promise<void>((res, reject) => {
+							downloadFile('https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe', 'ytdlp.exe').then(() => {
+								ytdlpPath = 'ytdlp.exe';
+								res();
+							});
+						});
+					} else if (process.platform === 'linux') {
+						if (fs.existsSync('ytdlp')) {
+							ytdlpPath = 'ytdlp';
+							resolve();
+							return;
+						}
+						return new Promise<void>((res, reject) => {
+							downloadFile('https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux', 'ytdlp').then(() => {
+								ytdlpPath = 'ytdlp';
+								res();
+							});
+						});
+					} else {
+						throw new Error('Unsupported platform');
+					}
+				default:
+					throw new Error('Unsupported platform');
+			}
+		} catch (e) {
+			reject(e);
+		}
+	});
+}
+
+function getYtdlpStream(ytId: string): Readable | null {
+	if (!ytdlpPath) return null;
+	return spawn(ytdlpPath, ['--buffer-size', '16k', '-f', 'ba*', '-o', '-', ytId], {shell: true}).stdout;
+}
 
 export async function getYoutubeAudioStream(url: string): Promise<GetAudioStreamResult> {
 	try {
-		let stream: Readable;
 		const cachedStream = await getCachedStream(url);
 		if (cachedStream) return [cachedStream, null];
+		await initialize();
 		const videoInfo = await getInfo(url);
 		if (!videoInfo) return [null, 'Unable to get video info'];
-		if (videoInfo.videoDetails.isLiveContent) {
-			const format = chooseFormat(videoInfo.formats, {quality: [128, 127, 120, 96, 95, 94, 93]});
-			stream = downloadFromInfo(videoInfo, {highWaterMark: 1 << 25, liveBuffer: 4900, format: format});
-		} else {
-			stream = ytdl(videoInfo.videoDetails.video_url, {filter: 'audioonly', highWaterMark: 1 << 25});
-		}
+		const stream = getYtdlpStream(videoInfo.videoDetails.videoId);
+		if (!stream) return [null, 'Unable to get YouTube audio stream'];
 		stream.on('error', (e: any) => {
 			console.log(e);
 		});
