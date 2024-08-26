@@ -1,4 +1,4 @@
-FROM node:21-alpine as builder
+FROM node:21-alpine AS builder
 ARG BUILDPLATFORM
 WORKDIR /app
 RUN apk update

@@ -11,6 +11,7 @@ import * as fs from 'fs';
 
 import {arch} from 'os';
 import {downloadFile} from '../lib/util';
+import ReadableStreamClone from 'readable-stream-clone';
 
 const system = arch();
 let ytdlpPath = '';
@@ -20,7 +21,7 @@ export function initialize() {
 		if (ytdlpPath) return resolve();
 		try {
 			switch (system) {
-				case 'aarch64':
+				case 'arm64':
 					if (process.platform !== 'linux') {
 						throw Error('Unsupported platform');
 					} else {
@@ -84,9 +85,14 @@ export function initialize() {
 
 function getYtdlpStream(ytId: string): Readable | null {
 	if (!ytdlpPath) return null;
-	const ytdlp = spawn(ytdlpPath, ['--buffer-size', '16k', '-f', 'ba*', '-x', '--audio-format', 'opus', '--audio-quality', '0', '-o', '-', ytId], {
-		shell: true,
-	});
+	const ytdlp = spawn(
+		ytdlpPath,
+		['--extractor-args', 'youtube:player_client=ios', '--buffer-size', '64k', '-f', 'ba*', '--audio-quality', '0', '-o', '-', ytId],
+		{
+			shell: true,
+			stdio: ['ignore', 'pipe', 'pipe'],
+		},
+	);
 	ytdlp.stderr.on('data', (data) => {
 		console.error(data.toString());
 	});
