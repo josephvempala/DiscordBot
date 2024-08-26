@@ -1,5 +1,4 @@
 import {Readable} from 'node:stream';
-import {getBasicInfo, getInfo} from '@distube/ytdl-core';
 import ytpl from 'ytpl';
 import ytsr from '@distube/ytsr';
 import {IBasicVideoInfo, VideoInfoType} from '../Interfaces/IBasicVideoInfo';
@@ -8,10 +7,11 @@ import {cacheStream, getCachedStream} from '../services/filecache';
 import {exec, spawn} from 'child_process';
 import {join} from 'path';
 import * as fs from 'fs';
+import https from 'https';
+import querystring from 'querystring';
 
 import {arch} from 'os';
 import {downloadFile} from '../lib/util';
-import ReadableStreamClone from 'readable-stream-clone';
 
 const system = arch();
 let ytdlpPath = '';
@@ -83,6 +83,35 @@ export function initialize() {
 	});
 }
 
+function getYouTubeVideoId(query: string): Promise<string> {
+	if (query.startsWith('https://www.youtube.com/watch?v=')) {
+		const url = new URL(query);
+		return Promise.resolve(url.searchParams.get('v')!);
+	}
+	const url = `https://www.youtube.com/results?search_query=${querystring.escape(query)}`;
+	return new Promise((resolve, reject) => {
+		const req = https
+			.get(url, (res) => {
+				let data = '';
+				res.on('data', (chunk) => {
+					data += chunk;
+				});
+				res.on('end', () => {
+					const regex = /(?:\[{"v.*?:")(.{11})/;
+					const match = data.match(regex);
+					if (match && match[1]) {
+						resolve(match[1]);
+					} else {
+						reject(new Error('No match found'));
+					}
+				});
+			})
+			.on('error', (err) => {
+				reject(err);
+			});
+	});
+}
+
 function getYtdlpStream(ytId: string): Readable | null {
 	if (!ytdlpPath) return null;
 	const ytdlp = spawn(
@@ -104,14 +133,14 @@ export async function getYoutubeAudioStream(url: string): Promise<GetAudioStream
 		const cachedStream = await getCachedStream(url);
 		if (cachedStream) return [cachedStream, null];
 		await initialize();
-		const videoInfo = await getInfo(url);
+		const videoInfo = await getYouTubeVideoId(url);
 		if (!videoInfo) return [null, 'Unable to get video info'];
-		const stream = getYtdlpStream(videoInfo.videoDetails.videoId);
+		const stream = getYtdlpStream(videoInfo);
 		if (!stream) return [null, 'Unable to get YouTube audio stream'];
 		stream.on('error', (e: any) => {
 			console.log(e);
 		});
-		if (!videoInfo.videoDetails.isLiveContent || +videoInfo.videoDetails.lengthSeconds > 1000) return [cacheStream(stream, url)!, null];
+		// if (!videoInfo.videoDetails.isLiveContent || +videoInfo.videoDetails.lengthSeconds > 1000) return [cacheStream(stream, url)!, null];
 		return [stream, null];
 	} catch (e) {
 		console.error(e);
@@ -136,15 +165,15 @@ export async function parseYouTubePlayParameter(param: string): Promise<IBasicVi
 			);
 			return result;
 		}
-		const basicVideoInfo = await getBasicInfo(param).catch(() => null);
+		const basicVideoInfo = await getYouTubeVideoId(param).catch(() => null);
 		if (basicVideoInfo)
 			return [
 				{
-					url: param,
-					title: basicVideoInfo.player_response.videoDetails.title,
-					length: +basicVideoInfo.videoDetails.lengthSeconds,
+					url: basicVideoInfo,
+					title: param,
+					length: 0,
 					type: VideoInfoType.YouTube,
-					isLiveStream: +basicVideoInfo.videoDetails.lengthSeconds == 0,
+					isLiveStream: false,
 				},
 			];
 	} catch (e: any) {
