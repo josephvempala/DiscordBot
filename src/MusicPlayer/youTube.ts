@@ -116,7 +116,7 @@ function getYtdlpStream(ytId: string): Readable | null {
 	if (!ytdlpPath) return null;
 	const ytdlp = spawn(
 		ytdlpPath,
-		['--extractor-args', 'youtube:player_client=ios', '--buffer-size', '64k', '-f', 'ba*', '--audio-quality', '0', '-o', '-', ytId],
+		['--extractor-args', 'youtube:player_client=ios,web,android', '--buffer-size', '64k', '-f', 'ba*', '--audio-quality', '0', '-o', '-', ytId],
 		{
 			shell: true,
 			stdio: ['ignore', 'pipe', 'pipe'],
